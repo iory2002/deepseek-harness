@@ -30,7 +30,7 @@
       "path": "../ui-dockkit"
     },
     {
-      "path": "../ui-layout"
+      "path": "../ui-layout/tsconfig.client.json"
     },
     {
       "path": "../ui-primitives"

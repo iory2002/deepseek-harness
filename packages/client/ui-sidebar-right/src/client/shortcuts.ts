@@ -12,15 +12,18 @@ import type {} from './locales.ts'
  * @param sidebar - current Session and page owner.
  * @param t - current localized command and unavailable labels.
  * @param closeWindow - private native close operation using the current configuration revision.
+ * @param plainColumn - whether the live frame arrangement renders this surface as
+ *   a permanently reserved column, where collapse and fullscreen do not exist.
  * @returns release callback for the commands.
  */
 export function registerSidebarShortcuts(shortcuts: Pick<Shortcuts, 'register' | 'runtime'>, sidebar: SidebarRightController,
-  t: TranslateNS<'sidebarRight'>, closeWindow: () => void): () => void {
+  t: TranslateNS<'sidebarRight'>, closeWindow: () => void, plainColumn: () => boolean): () => void {
   const reason = (kind: 'split' | 'fullscreen', target: SidebarRightTarget): string | null => {
     if (kind === 'split') {
       const block = sidebar.splitBlock(target)
       return block === undefined ? null : t(`command.${block}`)
     }
+    if (plainColumn()) return t('command.plainColumn')
     if (target.host === 'float') return t('command.float')
     return null
   }
@@ -35,6 +38,7 @@ export function registerSidebarShortcuts(shortcuts: Pick<Shortcuts, 'register' |
     },
     regions: ['page', 'editable', 'terminal'], modals: [],
     resolve: () => {
+      if (plainColumn()) return { status: 'blocked', reason: t('command.plainColumn') }
       const target = sidebar.commandTarget(null)
       if (target === undefined) return { status: 'blocked', reason: t('command.noSession') }
       return { status: 'handled', run: () => { if (sidebar.isTargetCurrent(target)) sidebar.toggleExpanded() } }

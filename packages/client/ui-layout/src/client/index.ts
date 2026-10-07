@@ -11,13 +11,20 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { LayoutArrangement, LayoutSettings } from '../arrangement-settings.ts'
+import type { RightColumnRole } from './columns.ts'
 import type { PanelInfo } from './service.ts'
+import { LAYOUT_SETTINGS_NAMESPACE } from '../arrangement-settings.ts'
 import { AppFrame } from './AppFrame.tsx'
+import { bindLayoutArrangement } from './arrangement.ts'
 import { createLayoutStore } from './stores.ts'
 import { LayoutController } from './service.ts'
+import { ArrangementRow } from './settings/ArrangementRow.tsx'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
+import { en as arrangementEn, zh as arrangementZh } from './locales.ts'
 import { en, zh } from './shortcut-locales.ts'
 import { ThemePresenter } from './theme-presenter.ts'
 
@@ -28,6 +35,7 @@ import { ThemePresenter } from './theme-presenter.ts'
 // against; the frame components and the store factory are package-internal.
 export { LayoutController } from './service.ts'
 export type { ILayout, MainPanelId, PanelInfo } from './service.ts'
+export type { LayoutArrangement } from '../arrangement-settings.ts'
 
 /** Selector hook over root-scoped panel selection. */
 export type UsePanelInfo = SnapshotSelectorHook<PanelInfo>
@@ -43,6 +51,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Layout keyboard command labels. */
     'shortcuts.layout': keyof typeof zh
+    /** Layout General Settings copy. */
+    'layout': keyof typeof arrangementZh
   }
 
   interface GlobalStandardProps {
@@ -72,17 +82,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'main': { kind: 'keyed'; scope: 'root' }
     /**
-     * The right column: a track the centre makes room for, or nothing. OCCUPIED
-     * by the right Sidebar, which uses the resolved column width in normal
-     * mode and covers the viewport in fullscreen, retaining the wide-screen
-     * column reservation underneath.
+     * The right column. Under the workspace-center arrangement it is the plain,
+     * permanently reserved Conversation column; otherwise it is the docked
+     * workspace surface: a track the centre makes room for, or nothing.
+     * OCCUPIED by the right Sidebar, which uses the resolved column width in
+     * normal mode and covers the viewport in fullscreen, retaining the
+     * wide-screen column reservation underneath.
      *
      * Whether the panel is shown, and whether it takes a track, is the
-     * occupant's own recorded business — it reports the composition of its
-     * expanded and presentation state through `ctx.layout`, and the frame sizes
-     * the track and places the resize handle from that. The expand control is
-     * not this column's: it is a button in the conversation header. The root
-     * occupant decides when to render its Session-bound content.
+     * occupant's own recorded business — under the `edge` role it reports the
+     * composition of its expanded and presentation state through `ctx.layout`,
+     * and the frame sizes the track and places the resize handle from that. The
+     * expand control is not this column's: it is a button in the conversation
+     * header. The root occupant decides when to render its Session-bound
+     * content, and renders it in normal flow under the `plain` role.
      */
     'rightbar': { kind: 'single'; scope: 'root'; owner: RightbarOwnerProps }
     /**
@@ -126,8 +139,14 @@ export interface SidebarOwnerProps {
   width: number
 }
 
-/** Right column owner share: resolved normal geometry and opening eligibility. */
+/** Right column owner share: resolved normal geometry, role, and opening eligibility. */
 export interface RightbarOwnerProps {
+  /**
+   * Which column model this render site presents. `edge` docks the occupant as
+   * the resizable, collapsible right panel; `plain` makes it a normal-flow
+   * column, and the frame then renders it in the flexible center slot position.
+   */
+  role: RightColumnRole
   /** Resolved normal panel width in px, not the saved preference; zero if it cannot fit. */
   width: number
   /** Current frame width in px. */
@@ -135,12 +154,13 @@ export interface RightbarOwnerProps {
   /**
    * Whether a normal right panel can retain 300px beside a 400px center.
    * Before a narrow opening, includes the space from collapsing the left sidebar.
+   * Always true under the `plain` role, whose column is reserved unconditionally.
    */
   canShow: boolean
 }
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
-export const inject = ['slots', 'theme', 'locale', 'shortcuts']
+export const inject = ['slots', 'theme', 'locale', 'shortcuts', 'configForms']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
@@ -150,6 +170,7 @@ export const inject = ['slots', 'theme', 'locale', 'shortcuts']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register('shortcuts.layout', { zh, en }), 'layout: command labels')
+  ctx.effect(() => ctx.locale.register('layout', { zh: arrangementZh, en: arrangementEn }), 'layout: setting copy')
   const t = ctx.locale.bind('shortcuts.layout')
 
   ctx.effect(() => {
@@ -164,8 +185,14 @@ export function apply(ctx: ClientContext): void {
       getSnapshot: () => instance.getSnapshot().panelInfo,
       subscribe: listener => instance.subscribe(listener),
     }
+    const arrangement: HostObservable<LayoutArrangement> = {
+      getSnapshot: () => instance.getSnapshot().layoutInfo.arrangement,
+      subscribe: listener => instance.subscribe(listener),
+    }
+    const disposeArrangement = bindLayoutArrangement(
+      instance, ctx.configForms.get<LayoutSettings>(LAYOUT_SETTINGS_NAMESPACE))
     const layout = new LayoutController(instance.actions, id =>
-      ctx.slots.entries('main').some(entry => entry.options.key === id), panelInfo)
+      ctx.slots.entries('main').some(entry => entry.options.key === id), panelInfo, arrangement)
     const disposePanelInfo = ctx.slots.provideRoot({ hooks: { panelInfo: layout.panelInfo } })
     const disposeService = ctx.reflect.provide('layout', layout)
     const disposeRegistration = ctx.slots.register({
@@ -194,10 +221,19 @@ export function apply(ctx: ClientContext): void {
     })
     const disposePanels = ctx.slots.subscribe('main', retainMainPanels)
     retainMainPanels()
+    const disposeRow = ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item',
+      id: 'frame-arrangement',
+      order: 30,
+      locale: 'layout',
+      store,
+    }, ArrangementRow))
     return () => {
       disposeShortcut()
+      disposeRow()
       layout.dispose()
       disposePanels()
+      disposeArrangement()
       disposeRegistration()
       disposePanelInfo()
       // provide()'s disposer settles asynchronously; teardown is synchronous fire-and-forget.

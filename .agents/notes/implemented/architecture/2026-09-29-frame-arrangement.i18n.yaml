@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-29-frame-arrangement.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-29-frame-arrangement.md
+/agent-note-a-configurable-frame-arrangement:
+  en: 9af136c4eb52784b
+  zh: 332e62993d72a800
+/agent-note-a-configurable-frame-arrangement/problem:
+  en: 44a71e5248902c8d
+  zh: 679a3767e4853d4d
+/agent-note-a-configurable-frame-arrangement/decision:
+  en: 0f8a3a48edadd1fc
+  zh: aaf5d4bf4e569834
+/agent-note-a-configurable-frame-arrangement/alternatives-considered:
+  en: 13bcde211a410786
+  zh: 4117370a6e093179
+/agent-note-a-configurable-frame-arrangement/consequences:
+  en: 234b30ab6a577433
+  zh: 66d7d0ca36a38441

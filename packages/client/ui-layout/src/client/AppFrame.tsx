@@ -20,6 +20,7 @@ import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
+import type { RightColumnRole } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
@@ -40,6 +41,27 @@ function CenterColumn(props: { children?: ReactNode }) {
 function MainPanel({ usePanelInfo, renderSlot }: Pick<PropsRuntime<'root'>, 'usePanelInfo'> & PropsRenderSlots<'main'>) {
   const panelId = usePanelInfo(info => info.activePanelId)
   return renderSlot('main', {}, { entryKey: panelId ?? 'conversation' })
+}
+
+/**
+ * Center occupant under the workspace-center arrangement: the selected global
+ * panel still owns the center, and the otherwise-default workspace surface
+ * leaves its dock for the flexible column.
+ */
+function WorkspaceCenter({
+  usePanelInfo, renderSlot, width, viewportWidth,
+}: Pick<PropsRuntime<'root'>, 'usePanelInfo'> & PropsRenderSlots<'main' | 'rightbar'> & {
+  width: number
+  viewportWidth: number
+}) {
+  const panelId = usePanelInfo(info => info.activePanelId)
+  if (panelId !== null) return renderSlot('main', {}, { entryKey: panelId })
+  return renderSlot('rightbar', { role: 'plain', width, viewportWidth, canShow: true })
+}
+
+/** Right column under the workspace-center arrangement: always the Conversation. */
+function ConversationColumn({ renderSlot }: PropsRenderSlots<'main'>) {
+  return renderSlot('main', {}, { entryKey: 'conversation' })
 }
 
 /**
@@ -127,6 +149,9 @@ export function AppFrame({
   t,
 }: AppFrameProps) {
   const layoutInfo = useStore(state => state.layoutInfo)
+  const arrangement = layoutInfo.arrangement
+  const plain = arrangement === 'workspace-center'
+  const model: RightColumnRole = plain ? 'plain' : 'edge'
   const frameRef = useRef<HTMLDivElement | null>(null)
   const viewport = layoutInfo.viewportWidth
 
@@ -169,9 +194,14 @@ export function AppFrame({
   const collapsedWidth = darwin
     || document.documentElement.hasAttribute('data-windows-titlebar') ? 0 : SIDEBAR_COLLAPSED
   // Opening on a narrow frame collapses the left sidebar. Eligibility must
-  // include that space before the occupant's first shown report arrives.
-  const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
-  const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
+  // include that space before the occupant's first shown report arrives. A
+  // plain right column reserves its width unconditionally, so only the docked
+  // edge model consults the occupant's track report.
+  const normal = computeColumns(viewport,
+    !plain && !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference,
+    rightbarPreference, collapsedWidth, model)
+  const cols = computeColumns(viewport, sidebarPreference,
+    plain || layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth, model)
   const colsRef = useRef(cols)
   colsRef.current = cols
   const rightbarWidth = useRef(normal.rightbar)
@@ -194,7 +224,7 @@ export function AppFrame({
   // chase the live window edge. The counter restarts the settle window when a
   // re-toggle interrupts a running transition.
   const [animating, setAnimating] = useState(0)
-  const trackToggle = `${sidebarCollapsed}:${layoutInfo.rightbarTrack}`
+  const trackToggle = `${sidebarCollapsed}:${layoutInfo.rightbarTrack}:${model}`
   const previousToggle = useRef(trackToggle)
   const previousViewport = useRef(viewport)
   useLayoutEffect(() => {
@@ -243,9 +273,17 @@ export function AppFrame({
     collapsed: sidebarCollapsed,
     width: cols.sidebar,
   }), [renderSlot, sidebarCollapsed, cols.sidebar])
-  const main = useMemo(() => (
-    <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
-  ), [usePanelInfo, renderSlot])
+  // Which surface each column hosts follows the arrangement: the workspace
+  // surface leaves its edge dock for the flexible center while the Conversation
+  // takes the reserved right column.
+  const center = useMemo(() => (plain
+    ? <WorkspaceCenter usePanelInfo={usePanelInfo} renderSlot={renderSlot} width={cols.center} viewportWidth={viewport} />
+    : <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />),
+  [plain, usePanelInfo, renderSlot, cols.center, viewport])
+  const right = useMemo(() => (plain
+    ? <ConversationColumn renderSlot={renderSlot} />
+    : renderSlot('rightbar', { role: 'edge', width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })),
+  [plain, renderSlot, normal.rightbar, viewport])
   const overlays = useMemo(() => renderSlot('shell.overlay', {}), [renderSlot])
   // Window-chrome seat over the main panels' top-left corner: only a fully
   // hidden sidebar column on macOS desktop leaves window chrome without a
@@ -263,12 +301,13 @@ export function AppFrame({
         ...(document.documentElement.hasAttribute('data-windows-titlebar')
           ? { '--dsh-windows-sidebar-width': `${cols.sidebar}px` } : {}),
         gridTemplateColumns:
-          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
+          `${cols.sidebar}px minmax(${cols.rightbar === 0 || plain ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
       }}
+      data-layout-arrangement={arrangement}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-rightbar-collapsed={cols.rightbar === 0 || undefined}
-      data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
-      data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
+      data-rightbar-fullscreen={(!plain && layoutInfo.rightbarFullscreen) || undefined}
+      data-rightbar-instant={(!plain && layoutInfo.rightbarInstant) || undefined}
       data-dragging={dragging || undefined}
       data-animating={animating > 0 || undefined}
     >
@@ -281,9 +320,9 @@ export function AppFrame({
         {sidebar}
       </div>
       <>
-        <CenterColumn>{main}</CenterColumn>
+        <CenterColumn>{center}</CenterColumn>
         <RightbarColumn>
-          {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
+          {right}
         </RightbarColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
@@ -296,7 +335,8 @@ export function AppFrame({
       )}
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
       {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
+      {/* A plain right column is always shown, so it keeps its handle without a track report. */}
+      {(plain || (layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen)) && normal.rightbar > 0 && (
         <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}
     </div>

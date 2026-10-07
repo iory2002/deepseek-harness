@@ -49,7 +49,7 @@
       "path": "../../client/ui-conversation/tsconfig.client.json"
     },
     {
-      "path": "../../client/ui-layout"
+      "path": "../../client/ui-layout/tsconfig.client.json"
     },
     {
       "path": "../../client/ui-slots"

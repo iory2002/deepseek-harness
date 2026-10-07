@@ -10,6 +10,7 @@
  */
 import type { BoundActions, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { LayoutArrangement } from '../arrangement-settings.ts'
 import type { createLayoutStore } from './stores.ts'
 
 /** Identity shared by a sidebar panel entry and its main-slot occupant. */
@@ -28,6 +29,12 @@ export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
 export interface ILayout {
   /** Selected central panel from the same root store used by `usePanelInfo`. */
   readonly panelInfo: HostObservable<PanelInfo>
+  /**
+   * Live frame arrangement, for occupants that present differently per column
+   * model: the workspace surface docks on the right edge under
+   * `conversation-center` and fills the center under `workspace-center`.
+   */
+  readonly arrangement: HostObservable<LayoutArrangement>
   /**
    * Select a global central panel without changing the current Session.
    * @param panelId - registered main key, or null to show the Conversation.
@@ -61,11 +68,13 @@ export class LayoutController implements ILayout {
    * @param panels - actions of the instance shared with the root entry.
    * @param hasMainPanel - checks the live main-slot registry for a panel id.
    * @param panelInfo - root store's shared central-panel selection source.
+   * @param arrangement - live frame arrangement shared with the frame.
    */
   constructor(
     private readonly panels: PanelActions,
     private readonly hasMainPanel: (id: MainPanelId) => boolean,
     readonly panelInfo: HostObservable<PanelInfo>,
+    readonly arrangement: HostObservable<LayoutArrangement>,
   ) {}
 
   /** Select a global panel or return to the Conversation. */

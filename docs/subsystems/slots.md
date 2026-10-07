@@ -108,7 +108,7 @@ Use owner props for values already known at one render occurrence, registration 
 
 ## Current hierarchy
 
-The hierarchy below is the shipped declaration tree. A child exists only while the named parent entry is mounted; optional feature entries can therefore make a subtree appear or disappear as one lifecycle unit.
+The hierarchy below is the shipped declaration tree. A child exists only while the named parent entry is mounted; optional feature entries can therefore make a subtree appear or disappear as one lifecycle unit. The frame's `main` and `rightbar` seats are positional: the frame arrangement decides which of the two renders in the flexible center and which in the right column, and hands the `rightbar` occupant a `role` of `edge` (docked, collapsible panel) or `plain` (permanently reserved normal-flow column). The tree below lists declarations, not positions.
 
 ```text
 root

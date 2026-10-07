@@ -50,4 +50,16 @@ describe('computeColumns', () => {
     expect(computeColumns(755, 0, 0).rightbar).toBe(0)
     expect(computeColumns(1920, 0, 0).rightbar).toBe(0)
   })
+
+  it('keeps a plain right column and lets the center absorb the remainder', () => {
+    expect(computeColumns(1920, 280, 864, undefined, 'plain')).toEqual({ sidebar: 280, center: 776, rightbar: 864 })
+    // The plain column never concedes a track: the center falls to zero first.
+    expect(computeColumns(900, 280, 400, undefined, 'plain')).toEqual({ sidebar: 280, center: 220, rightbar: 400 })
+    expect(computeColumns(600, 280, 400, undefined, 'plain')).toEqual({ sidebar: 280, center: 0, rightbar: 400 })
+    expect(computeColumns(3000, 9999, 9999, undefined, 'plain')).toEqual({ sidebar: 420, center: 480, rightbar: 2100 })
+  })
+
+  it('leaves a closed plain column out of the frame entirely', () => {
+    expect(computeColumns(1920, 280, 0, undefined, 'plain')).toEqual({ sidebar: 280, center: 1640, rightbar: 0 })
+  })
 })

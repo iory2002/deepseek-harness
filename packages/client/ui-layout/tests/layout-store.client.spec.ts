@@ -16,6 +16,7 @@ describe('createLayoutStore', () => {
         sidebar: 280,
         viewportWidth: 1920,
         narrowExpanded: false,
+        arrangement: 'conversation-center',
         rightbar: null,
         rightbarShown: false,
         rightbarTrack: false,

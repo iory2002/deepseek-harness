@@ -205,7 +205,7 @@ describe('AppFrame', () => {
     const { frame, rightOwner, sidebarOwner, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([280, 0])
     expect(sidebarOwner()).toEqual({ collapsed: false, width: 280 })
-    expect(rightOwner()).toEqual({ width: 864, viewportWidth: 1920, canShow: true })
+    expect(rightOwner()).toEqual({ role: 'edge', width: 864, viewportWidth: 1920, canShow: true })
     expect(slotCalls.find(c => c.key === 'main')).toEqual({ key: 'main', props: {}, options: { entryKey: 'conversation' } })
   })
 
@@ -293,7 +293,7 @@ describe('AppFrame normal width concessions', () => {
     frameWidth = 1000
     const { instance, rightOwner } = mountFrame(1920)
     expect(instance.getSnapshot().layoutInfo.viewportWidth).toBe(1000)
-    expect(rightOwner()).toEqual({ width: 450, viewportWidth: 1000, canShow: true })
+    expect(rightOwner()).toEqual({ role: 'edge', width: 450, viewportWidth: 1000, canShow: true })
     act(() => { instance.actions.openRightbar(true, false) })
     expect(instance.getSnapshot().layoutInfo.rightbar).toBe(450)
     resize(1920)
@@ -307,12 +307,12 @@ describe('AppFrame normal width concessions', () => {
     // The template carries the ratio-clamped preference; the panel (rightOwner
     // width) reports the resolved squeeze.
     expect(tracks(frame)).toEqual([420, 840])
-    expect(rightOwner()).toEqual({ width: 380, viewportWidth: 1200, canShow: true })
+    expect(rightOwner()).toEqual({ role: 'edge', width: 380, viewportWidth: 1200, canShow: true })
     resize(1120)
     expect(tracks(frame)).toEqual([420, 784])
     resize(1119)
     expect(tracks(frame)).toEqual([420, 0])
-    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 1119, canShow: false })
+    expect(rightOwner()).toEqual({ role: 'edge', width: 0, viewportWidth: 1119, canShow: false })
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbar: 864 })
     act(() => { instance.actions.closeRightbar() })
@@ -327,7 +327,7 @@ describe('AppFrame normal width concessions', () => {
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([280, 0])
-    expect(rightOwner()).toEqual({ width: 344, viewportWidth: 800, canShow: true })
+    expect(rightOwner()).toEqual({ role: 'edge', width: 344, viewportWidth: 800, canShow: true })
     act(() => { instance.actions.openRightbar(true, false) })
     expect(tracks(frame)).toEqual([56, 360])
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ narrowExpanded: false, rightbar: 360 })
@@ -338,7 +338,7 @@ describe('AppFrame normal width concessions', () => {
     frameWidth = width
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
-    expect(rightOwner()).toEqual({ width: rightbar, viewportWidth: width, canShow })
+    expect(rightOwner()).toEqual({ role: 'edge', width: rightbar, viewportWidth: width, canShow })
   })
 
   it('does not anticipate another left collapse after the right panel is already shown', () => {
@@ -508,7 +508,7 @@ describe('AppFrame right panel presentation', () => {
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(false, true) })
     expect(tracks(frame)).toEqual([56, 0])
-    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 700, canShow: false })
+    expect(rightOwner()).toEqual({ role: 'edge', width: 0, viewportWidth: 700, canShow: false })
     expect(instance.getSnapshot().layoutInfo.rightbarShown).toBe(true)
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
   })
@@ -675,5 +675,57 @@ describe('AppFrame frame measurement lifecycle', () => {
     act(() => { observer.fire(); flushFrames() })
     expect(instance.getSnapshot().layoutInfo.viewportWidth).toBe(1920)
     expect(animationFrames.size).toBe(0)
+  })
+})
+
+describe('AppFrame workspace-center arrangement', () => {
+  const switchTo = (instance: { actions: { setArrangement: (next: 'workspace-center') => void } }): void => {
+    act(() => { instance.actions.setArrangement('workspace-center') })
+  }
+
+  it('hosts the workspace surface in the center and the Conversation in the reserved right column', () => {
+    const { frame, instance, slotCalls } = mountFrame()
+    switchTo(instance)
+    expect(frame.getAttribute('data-layout-arrangement')).toBe('workspace-center')
+    // The workspace surface keeps its own seat and renders in normal flow.
+    expect(slotCalls.findLast(call => call.key === 'rightbar')).toEqual({
+      key: 'rightbar', props: { role: 'plain', width: 776, viewportWidth: 1920, canShow: true }, options: undefined,
+    })
+    expect(slotCalls.filter(call => call.key === 'main').at(-1)).toEqual({
+      key: 'main', props: {}, options: { entryKey: 'conversation' },
+    })
+    // A plain right column reserves its width without a center minimum, so the
+    // Conversation keeps its column while the workspace surface squeezes.
+    expect(frame.style.gridTemplateColumns).toBe('280px minmax(0px, 1fr) minmax(0px, 864px)')
+    expect(frame.getAttribute('data-rightbar-collapsed')).toBeNull()
+    expect(frame.hasAttribute('data-rightbar-fullscreen')).toBe(false)
+    expect(frame.querySelector('[data-side="rightbar"]')).not.toBeNull()
+  })
+
+  it('keeps the selected global panel in the center and the Conversation beside it', () => {
+    const { instance, slotCalls } = mountFrame()
+    switchTo(instance)
+    act(() => { instance.actions.selectPanel('plugin-manager' as MainPanelId) })
+    const keys = slotCalls.filter(call => call.key === 'main').map(call => call.options?.entryKey)
+    expect(keys).toContain('conversation')
+    expect(keys.at(-1)).toBe('plugin-manager')
+  })
+
+  it('returns both surfaces to their shipped columns on the conversation-center arrangement', () => {
+    const { frame, instance, slotCalls } = mountFrame()
+    switchTo(instance)
+    act(() => { instance.actions.setArrangement('conversation-center') })
+    expect(frame.getAttribute('data-layout-arrangement')).toBe('conversation-center')
+    expect(slotCalls.findLast(call => call.key === 'main')).toEqual({
+      key: 'main', props: {}, options: { entryKey: 'conversation' },
+    })
+    expect(slotCalls.findLast(call => call.key === 'rightbar')!.props).toEqual({
+      role: 'edge', width: 864, viewportWidth: 1920, canShow: true,
+    })
+    // The docked column waits for its occupant's track report, which the plain
+    // role never made; the report then restores the pushed geometry.
+    expect(frame.style.gridTemplateColumns).toBe('280px minmax(0px, 1fr) minmax(0px, 0px)')
+    act(() => { instance.actions.openRightbar(true, false) })
+    expect(frame.style.gridTemplateColumns).toBe('280px minmax(400px, 1fr) minmax(0px, 864px)')
   })
 })

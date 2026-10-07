@@ -138,6 +138,7 @@ interface PanelProps {
   readonly useTabNavigation: RightbarSeatProps['useTabNavigation']
   readonly useStore: Store['useStore']
   readonly occurrence: SidebarRightInjected['occurrence']
+  readonly role: RightbarSeatProps['role']
   readonly fullscreen: boolean
   readonly autoFullscreen: boolean
   readonly active: boolean
@@ -297,25 +298,30 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
 
 /**
  * The panel: the docked surface with the two controls in its top-right strip,
- * anchored to the frame's right edge and slid off it while collapsed.
+ * anchored to the frame's right edge and slid off it while collapsed. Under the
+ * `plain` role it is instead a normal-flow column: always open, never sliding,
+ * never covering the frame, and without the presentation controls.
  */
 function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<HTMLDivElement> }): ReactNode {
-  const { sessionId, surface, actions, t, renderSlot, openTab, width, reportRoom, fullscreen, panelRef } = panel
+  const { sessionId, surface, actions, t, renderSlot, openTab, width, reportRoom, fullscreen, panelRef, role } = panel
   const { expanded } = surface.layout
+  const plain = role === 'plain'
+  const open = plain || expanded
   const types = panel.useTabTypes(value => value)
   return (
     <div
       ref={panelRef}
       className={css.panel}
-      style={{ width: fullscreen ? '100vw' : width,
-        '--dsh-sidebar-width': fullscreen ? '100vw' : `${width}px` } as CSSProperties}
+      style={{ width: plain ? '100%' : fullscreen ? '100vw' : width,
+        '--dsh-sidebar-width': plain ? '100%' : fullscreen ? '100vw' : `${width}px` } as CSSProperties}
       data-sidebar-right-session={sessionId}
-      data-sidebar-right-panel={fullscreen ? 'fullscreen' : 'push'}
-      data-sidebar-right-open={expanded || undefined}
+      data-sidebar-right-role={role}
+      data-sidebar-right-panel={!plain && fullscreen ? 'fullscreen' : 'push'}
+      data-sidebar-right-open={open || undefined}
       // Off-edge is out of reach: the stylesheet's visibility flip takes the
       // hidden panel out of the tab order, and this takes it out of the
-      // accessibility tree.
-      aria-hidden={!expanded || undefined}
+      // accessibility tree. A plain column is never off-edge.
+      aria-hidden={!open || undefined}
     >
       <div className={css.panelBody}>
         <DockLayout
@@ -333,7 +339,7 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
           keepMounted={tab => types.find(type => type.kind === tab.kind)?.keepMounted === true}
           renderTabMenuItems={(tab, dismiss) =>
             renderSlot('sidebar.right.tab.menu.item', { tab, dismiss })}
-          chrome={<PanelChrome
+          chrome={plain ? undefined : <PanelChrome
             sessionId={sessionId} fullscreen={fullscreen} actions={actions} t={t}
             shortcuts={panel.shortcuts} toggleFullscreen={panel.toggleFullscreen}
           />}
@@ -346,21 +352,24 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
 
 /**
  * The right column's occupant: stable tab containers, docked or floating.
- * It is also where the frame learns the panel's presentation, because this is
- * the seat that knows it. `ctx.sidebarRight` names the on-screen Session
- * itself; this seat reports only what it renders with: the room its kit
- * measured and the automatic fullscreen rule of its frame width.
+ * It is also where the frame learns the panel's presentation under the `edge`
+ * role, because this is the seat that knows it. `ctx.sidebarRight` names the
+ * on-screen Session itself; this seat reports only what it renders with: the
+ * room its kit measured and the automatic fullscreen rule of its frame width.
+ * Under the `plain` role the frame owns a permanently reserved column and this
+ * seat reports nothing: no collapse, no fullscreen, no track concession.
  */
 export function RightbarSeat({
-  sessionId, width, viewportWidth, canShow, useStore, actions, t, renderSlot, syncPresentation, measureRoom, reportAutoFullscreen,
+  sessionId, role, width, viewportWidth, canShow, useStore, actions, t, renderSlot, syncPresentation, measureRoom, reportAutoFullscreen,
   openTab, closeTab, useTabTypes, useTabNavigation, occurrence, retainTab, active, useShortcuts, splitPane, toggleFullscreen,
 }: RightbarSeatProps): ReactNode {
   // One store instance per session, so this map holds this session's surface.
   const shortcuts = useShortcuts(entries => entries)
   const surface = useStore(state => state.bySession[sessionId])
-  const shown = active && surface !== undefined && surface.layout.expanded
-  const autoFullscreen = viewportWidth < 768
-  const fullscreen = autoFullscreen || surface?.layout.mode === 'fullscreen'
+  const plain = role === 'plain'
+  const shown = active && surface !== undefined && (plain || surface.layout.expanded)
+  const autoFullscreen = !plain && viewportWidth < 768
+  const fullscreen = !plain && (autoFullscreen || surface?.layout.mode === 'fullscreen')
   const panelRef = useRef<HTMLDivElement | null>(null)
   // A reading never re-renders anything: the service applies it when it splits.
   const reportRoom = useCallback((fits: ReadonlyMap<PaneId, HalvesFit>): void => {
@@ -372,12 +381,22 @@ export function RightbarSeat({
     if (active && surface === undefined) actions.open(sessionId)
   }, [actions, sessionId, surface, active])
 
+  // A plain column has no collapse: a surface restored collapsed opens here.
   useLayoutEffect(() => {
-    if (shown && !fullscreen && !canShow) actions.setExpanded(sessionId, false)
-  }, [actions, sessionId, shown, fullscreen, canShow])
+    if (!plain || surface === undefined || surface.layout.expanded) return
+    actions.setExpanded(sessionId, true)
+  }, [actions, sessionId, plain, surface])
+
+  useLayoutEffect(() => {
+    if (plain || !shown || fullscreen || canShow) return
+    actions.setExpanded(sessionId, false)
+  }, [actions, sessionId, plain, shown, fullscreen, canShow])
 
   // Read only when the fullscreen command runs, after this commit has settled.
-  useLayoutEffect(() => { reportAutoFullscreen(autoFullscreen) }, [reportAutoFullscreen, autoFullscreen])
+  useLayoutEffect(() => {
+    if (plain) return
+    reportAutoFullscreen(autoFullscreen)
+  }, [reportAutoFullscreen, plain, autoFullscreen])
 
   // The open/close slide needs no pulse of its own: the shell's window drag
   // watcher (ui-web) measures the marked rows every frame the surface moves and
@@ -386,7 +405,7 @@ export function RightbarSeat({
   // Fullscreen leaves the previous column report in force until its own slide
   // completes. Normal presentation and zero-duration transitions report before paint.
   useLayoutEffect(() => {
-    if (!active) return
+    if (plain || !active) return
     let disposed = false
     const reportWhenCovered = (): void => {
       if (disposed) return
@@ -405,12 +424,12 @@ export function RightbarSeat({
     }
     reportWhenCovered()
     return () => { disposed = true }
-  }, [sessionId, shown, track, fullscreen, syncPresentation, active])
+  }, [sessionId, shown, track, fullscreen, syncPresentation, active, plain])
   // Leaving is part of that report: a seat that unmounts with its session must
   // hand the track back rather than leave one sized for a surface nobody draws.
-  useLayoutEffect(() => active
-    ? () => { syncPresentation({ shown: false, track: false, fullscreen: false }) }
-    : undefined, [syncPresentation, active])
+  useLayoutEffect(() => (plain || !active)
+    ? undefined
+    : () => { syncPresentation({ shown: false, track: false, fullscreen: false }) }, [syncPresentation, plain, active])
 
   // The Tab domain is not synced here: the controller adopted this session's
   // store as the runtime minted it and reconciles on the store's own commits,
@@ -418,7 +437,7 @@ export function RightbarSeat({
 
   if (surface === undefined) return null
   const panel: PanelProps = {
-    sessionId, actions, t, renderSlot, surface, openTab, closeTab, useTabTypes, useTabNavigation, useStore, occurrence,
+    sessionId, role, actions, t, renderSlot, surface, openTab, closeTab, useTabTypes, useTabNavigation, useStore, occurrence,
     fullscreen, autoFullscreen, reportRoom, active, retainTab, shortcuts, splitPane, toggleFullscreen,
   }
   return <SidebarPanel {...panel} width={width} panelRef={panelRef} />

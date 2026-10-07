@@ -51,7 +51,7 @@
       "path": "../ui-chat/tsconfig.client.json"
     },
     {
-      "path": "../ui-layout"
+      "path": "../ui-layout/tsconfig.client.json"
     },
     {
       "path": "../../settings/settings"

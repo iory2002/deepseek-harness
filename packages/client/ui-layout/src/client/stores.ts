@@ -3,6 +3,8 @@
  * The registration supplies a fresh store and binds its actions to ctx.layout.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
+import { DEFAULT_LAYOUT_ARRANGEMENT } from '../arrangement-settings.ts'
+import type { LayoutArrangement } from '../arrangement-settings.ts'
 import type { MainPanelId } from './service.ts'
 import {
   clampWidth, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN,
@@ -26,6 +28,11 @@ type LayoutInfo = {
   /** Last positive frame measurement; window width bootstraps the first render. */
   viewportWidth: number
   narrowExpanded: boolean
+  /**
+   * Which surface the flexible center column hosts; the other takes the right
+   * column. Projected from the durable layout setting and written back through it.
+   */
+  arrangement: LayoutArrangement
   /**
    * Saved right panel width in px, or null before its first opening. Resizing
    * the frame and closing the panel preserve this preference.
@@ -62,6 +69,7 @@ type LayoutActions = {
   toggleSidebar: (draft: LayoutState) => void
   setViewportWidth: (draft: LayoutState, width: number) => void
   setRightbar: (draft: LayoutState, px: number) => void
+  setArrangement: (draft: LayoutState, arrangement: LayoutArrangement) => void
   openRightbar: (draft: LayoutState, track: boolean, fullscreen: boolean) => void
   closeRightbar: (draft: LayoutState) => void
 }
@@ -83,6 +91,7 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         sidebar: SIDEBAR_DEFAULT,
         viewportWidth: window.innerWidth,
         narrowExpanded: false,
+        arrangement: DEFAULT_LAYOUT_ARRANGEMENT,
         rightbar: null,
         rightbarShown: false,
         rightbarTrack: false,
@@ -123,6 +132,12 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       setRightbar: (d, px: number) => {
         d.layoutInfo.rightbarInstant = false
         d.layoutInfo.rightbar = clampWidth(px, RIGHTBAR_MIN, Math.max(RIGHTBAR_MIN, d.layoutInfo.viewportWidth * RIGHTBAR_MAX_RATIO))
+      },
+      // Switching arrangements keeps the recorded panel presentation and width:
+      // the arriving surface opens through its own seat, and the plain role
+      // ignores the edge role's track reports until one is reported again.
+      setArrangement: (d, arrangement: LayoutArrangement) => {
+        d.layoutInfo.arrangement = arrangement
       },
       openRightbar: (d, track: boolean, fullscreen: boolean) => {
         if (!d.layoutInfo.rightbarShown || d.layoutInfo.rightbarTrack !== track || d.layoutInfo.rightbarFullscreen !== fullscreen) {

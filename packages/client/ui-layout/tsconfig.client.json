@@ -2,29 +2,36 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
   },
   "include": [
     "src"
   ],
   "references": [
     {
-      "path": "../../api/workspace-controller/tsconfig.client.json"
+      "path": "../../util/brand"
     },
     {
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
+    },
+    {
       "path": "../ui-slots"
     },
     {
-      "path": "../store"
+      "path": "../ui-theme/tsconfig.client.json"
     },
     {
       "path": "../ui-primitives"
     },
     {
-      "path": "../ui-conversation/tsconfig.client.json"
+      "path": "../store"
     },
     {
       "path": "../ui-renderer"
@@ -33,16 +40,13 @@
       "path": "../ui-session"
     },
     {
-      "path": "../ui-layout/tsconfig.client.json"
-    },
-    {
-      "path": "../locale/tsconfig.client.json"
+      "path": "../ui-settings/tsconfig.client.json"
     },
     {
       "path": "../shortcuts/tsconfig.client.json"
-    },
-    {
-      "path": "../product-analytics/tsconfig.client.json"
     }
+  ],
+  "exclude": [
+    "src/index.ts"
   ]
 }

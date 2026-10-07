@@ -7,6 +7,15 @@
 /** Resolved widths for one frame. */
 export interface Columns { sidebar: number; center: number; rightbar: number }
 
+/**
+ * Right-column roles. `edge` is the docked panel: it concedes its track, and
+ * the center's minimum, before the center may shrink. `plain` is a permanently
+ * reserved column: it keeps its width while the center absorbs the remainder.
+ * The role is both the frame's geometry model and the occupant's presentation
+ * contract, so the frame passes it down as the `rightbar` owner share.
+ */
+export type RightColumnRole = 'edge' | 'plain'
+
 /** Center width protected while the normal right column is open. */
 export const CENTER_MIN = 400
 /** Sidebar drag clamp floor. */
@@ -43,17 +52,31 @@ export function clampWidth(px: number, min: number, max: number): number {
  * Solve the three column widths for one viewport frame.
  * @param viewport - available frame width in px.
  * @param sidebar - sidebar width preference in px (0 = closed).
- * @param rightbar - requested right panel width in px (0 = no track).
+ * @param rightbar - requested right column width in px (0 = no track).
  * @param collapsedWidth - track width of the closed sidebar; the default keeps
  *   the icon rail, 0 hides the column entirely (macOS desktop).
- * @returns actual widths after shrinking or removing the right track; only
- *   without that track may the center fall below its minimum, down to zero.
+ * @param model - right-column role: `edge` concedes the right track before the
+ *   center falls below its minimum; `plain` keeps the right column and lets the
+ *   center absorb the remainder.
+ * @returns actual widths; only under the `edge` model and without a track may
+ *   the center fall below its minimum, down to zero.
  */
-export function computeColumns(viewport: number, sidebar: number, rightbar: number, collapsedWidth = SIDEBAR_COLLAPSED): Columns {
+export function computeColumns(
+  viewport: number,
+  sidebar: number,
+  rightbar: number,
+  collapsedWidth = SIDEBAR_COLLAPSED,
+  model: RightColumnRole = 'edge',
+): Columns {
   const s = sidebar === 0 ? collapsedWidth : clampWidth(sidebar, SIDEBAR_MIN, SIDEBAR_MAX)
+  const ceiling = viewport * RIGHTBAR_MAX_RATIO
+  if (model === 'plain') {
+    const r = rightbar === 0 ? 0 : clampWidth(rightbar, RIGHTBAR_MIN, ceiling)
+    return { sidebar: s, center: Math.max(0, viewport - s - r), rightbar: r }
+  }
   const available = viewport - s - CENTER_MIN
   const r = rightbar === 0 || available < RIGHTBAR_MIN
     ? 0
-    : Math.min(available, clampWidth(rightbar, RIGHTBAR_MIN, viewport * RIGHTBAR_MAX_RATIO))
+    : Math.min(available, clampWidth(rightbar, RIGHTBAR_MIN, ceiling))
   return { sidebar: s, center: Math.max(0, viewport - s - r), rightbar: r }
 }

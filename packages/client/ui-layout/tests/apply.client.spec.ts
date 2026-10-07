@@ -10,7 +10,6 @@ import type { SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply as themeApply, inject as themeInject, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { apply, inject, LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
-import { apply as nodeApply } from '@deepseek-ai/dsh-client-ui-layout'
 import type { MainPanelId } from '../src/client/service.ts'
 import type { createLayoutStore } from '../src/client/stores.ts'
 
@@ -79,7 +78,7 @@ async function bench() {
 
 describe('ui-layout client apply', () => {
   it('declares its service dependencies', () => {
-    expect(inject).toEqual(['slots', 'theme', 'locale', 'shortcuts'])
+    expect(inject).toEqual(['slots', 'theme', 'locale', 'shortcuts', 'configForms'])
   })
 
   it('provides ctx.layout and declares the five root-scoped frame slots', async () => {
@@ -168,12 +167,5 @@ describe('ui-layout client apply', () => {
     expect(host.root.getSnapshot().hooks.panelInfo).toBeUndefined()
     // The built-in root declaration survives entry teardown (renderer-owned).
     expect(slots.spec('root')).toEqual({ kind: 'single', scope: 'root' })
-  })
-})
-
-describe('node half', () => {
-  it('node apply is an intentional no-op (loader-managed lifecycle only)', () => {
-    nodeApply()
-    expect(true).toBe(true) // reaching here without throw is the contract
   })
 })

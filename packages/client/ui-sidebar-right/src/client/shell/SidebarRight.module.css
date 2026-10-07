@@ -65,6 +65,28 @@
   --dsh-dockkit-dock-layer: 40;
 }
 
+/*
+ * Plain role: the frame renders this occupant in a permanently reserved column
+ * (the flexible center under the workspace-center arrangement). The panel is
+ * ordinary flow filling that column, so nothing slides, hides, or covers the
+ * frame, and the presentation controls are absent.
+ */
+.panel[data-sidebar-right-role='plain'] {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.panel[data-sidebar-right-role='plain'] :global([data-dockkit-host='dock']),
+.panel[data-sidebar-right-role='plain'] :global([data-dockkit-empty]),
+.panel[data-sidebar-right-role='plain'] :global([data-dockkit-divider]) {
+  transform: none;
+  visibility: visible;
+  transition: none;
+}
+
 /* No whole-box subtraction here: Electron drag regions are window geometry,
    not stacking, so a strip row inside this fullscreen content that marks itself
    `data-window-drag` (ui-dockkit) still owns the drag over its own box, and

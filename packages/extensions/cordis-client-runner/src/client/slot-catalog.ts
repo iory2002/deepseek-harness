@@ -1764,7 +1764,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main\', () => ctx.slots.register(\n      { name: \'main\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:73',
+    source: 'packages/client/ui-layout/src/client/index.ts:83',
   },
   {
     key: 'main.conversation',
@@ -2126,13 +2126,15 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'rightbar',
     kind: 'single',
     scope: 'root',
-    summary: 'The right column: a track the centre makes room for, or nothing.',
-    doc: 'The right column: a track the centre makes room for, or nothing. OCCUPIED\nby the right Sidebar, which uses the resolved column width in normal\nmode and covers the viewport in fullscreen, retaining the wide-screen\ncolumn reservation underneath.\n\nWhether the panel is shown, and whether it takes a track, is the\noccupant\'s own recorded business — it reports the composition of its\nexpanded and presentation state through `ctx.layout`, and the frame sizes\nthe track and places the resize handle from that. The expand control is\nnot this column\'s: it is a button in the conversation header. The root\noccupant decides when to render its Session-bound content.',
+    summary: 'The right column.',
+    doc: 'The right column. Under the workspace-center arrangement it is the plain,\npermanently reserved Conversation column; otherwise it is the docked\nworkspace surface: a track the centre makes room for, or nothing.\nOCCUPIED by the right Sidebar, which uses the resolved column width in\nnormal mode and covers the viewport in fullscreen, retaining the\nwide-screen column reservation underneath.\n\nWhether the panel is shown, and whether it takes a track, is the\noccupant\'s own recorded business — under the `edge` role it reports the\ncomposition of its expanded and presentation state through `ctx.layout`,\nand the frame sizes the track and places the resize handle from that. The\nexpand control is not this column\'s: it is a button in the conversation\nheader. The root occupant decides when to render its Session-bound\ncontent, and renders it in normal flow under the `plain` role.',
     registerOptions: [],
     ownerProps: [
-      '/** Right column owner share: resolved normal geometry and opening eligibility. */\nexport interface RightbarOwnerProps {\n  /** Resolved normal panel width in px, not the saved preference; zero if it cannot fit. */\n  width: number\n  /** Current frame width in px. */\n  viewportWidth: number\n  /**\n   * Whether a normal right panel can retain 300px beside a 400px center.\n   * Before a narrow opening, includes the space from collapsing the left sidebar.\n   */\n  canShow: boolean\n}',
+      '/** Right column owner share: resolved normal geometry, role, and opening eligibility. */\nexport interface RightbarOwnerProps {\n  /**\n   * Which column model this render site presents. `edge` docks the occupant as\n   * the resizable, collapsible right panel; `plain` makes it a normal-flow\n   * column, and the frame then renders it in the flexible center slot position.\n   */\n  role: RightColumnRole\n  /** Resolved normal panel width in px, not the saved preference; zero if it cannot fit. */\n  width: number\n  /** Current frame width in px. */\n  viewportWidth: number\n  /**\n   * Whether a normal right panel can retain 300px beside a 400px center.\n   * Before a narrow opening, includes the space from collapsing the left sidebar.\n   * Always true under the `plain` role, whose column is reserved unconditionally.\n   */\n  canShow: boolean\n}',
     ],
-    ownerPropsReferences: [],
+    ownerPropsReferences: [
+      'RightColumnRole',
+    ],
     standardProps: [
       'useResource: UseResource',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
@@ -2151,7 +2153,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'rightbar\', () => ctx.slots.register(\n      { name: \'rightbar\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:87',
+    source: 'packages/client/ui-layout/src/client/index.ts:100',
   },
   {
     key: 'rightbar.session',
@@ -2161,11 +2163,12 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'Session content selected by the root-scoped right Sidebar controller.',
     registerOptions: [],
     ownerProps: [
-      '/** Right column owner share: resolved normal geometry and opening eligibility. */\nexport interface RightbarOwnerProps {\n  /** Resolved normal panel width in px, not the saved preference; zero if it cannot fit. */\n  width: number\n  /** Current frame width in px. */\n  viewportWidth: number\n  /**\n   * Whether a normal right panel can retain 300px beside a 400px center.\n   * Before a narrow opening, includes the space from collapsing the left sidebar.\n   */\n  canShow: boolean\n}',
+      '/** Right column owner share: resolved normal geometry, role, and opening eligibility. */\nexport interface RightbarOwnerProps {\n  /**\n   * Which column model this render site presents. `edge` docks the occupant as\n   * the resizable, collapsible right panel; `plain` makes it a normal-flow\n   * column, and the frame then renders it in the flexible center slot position.\n   */\n  role: RightColumnRole\n  /** Resolved normal panel width in px, not the saved preference; zero if it cannot fit. */\n  width: number\n  /** Current frame width in px. */\n  viewportWidth: number\n  /**\n   * Whether a normal right panel can retain 300px beside a 400px center.\n   * Before a narrow opening, includes the space from collapsing the left sidebar.\n   * Always true under the `plain` role, whose column is reserved unconditionally.\n   */\n  canShow: boolean\n}',
       '/** Identity of one open tab; distinct copies of one content share `contentId`, never `TabId`. */\nexport type TabId = Branded<\'TabId\'>',
     ],
     ownerPropsReferences: [
       'Branded',
+      'RightColumnRole',
     ],
     standardProps: [
       'useResource: UseResource',
@@ -2356,13 +2359,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-chat PerformanceUsageRow id \'performance-usage\'',
       'client-ui-chat TranscriptViewRow id \'transcript-view\'',
       'client-ui-conversation EnterBehaviorRow id \'composer-enter\'',
+      'client-ui-layout ArrangementRow id \'frame-arrangement\'',
       'client-ui-permission-presets PermissionRow id \'permission\'',
       'client-ui-settings-general DeveloperToolsRow id \'developer-tools\'',
       'client-ui-settings-general CurrentVersionRow id \'current-version\'',
       'client-ui-settings-session-log UploadRow',
       'client-ui-shortcuts ShortcutsRow id \'shortcuts\'',
       'client-ui-theme AppearanceRow id \'appearance\'',
-      'client-ui-theme FontSizeRow id \'font-size\'',
+      'client-ui-theme FontSizeRow',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.general.item\', () => ctx.slots.register(\n      { name: \'settings.general.item\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -2758,7 +2762,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.leading\', () => ctx.slots.register(\n      { name: \'shell.leading\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:112',
+    source: 'packages/client/ui-layout/src/client/index.ts:125',
   },
   {
     key: 'shell.overlay',
@@ -2815,7 +2819,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.overlay\', () => ctx.slots.register(\n      { name: \'shell.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:98',
+    source: 'packages/client/ui-layout/src/client/index.ts:111',
   },
   {
     key: 'shell.quota-notice',
@@ -2886,7 +2890,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar\', () => ctx.slots.register(\n      { name: \'sidebar\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:68',
+    source: 'packages/client/ui-layout/src/client/index.ts:78',
   },
   {
     key: 'sidebar.brand.mark',

@@ -14,14 +14,14 @@ export interface RightbarRootInjected {
 
 type RootProps = PropsRuntime<'rightbar'> & PropsRenderSlots<'rightbar.session'> & InjectFace<RightbarRootInjected>
 
-function SessionView({ view, visible, SessionProvider, renderSlot, mountView, width, viewportWidth, canShow }:
-  Pick<RootProps, 'SessionProvider' | 'renderSlot' | 'mountView' | 'width' | 'viewportWidth' | 'canShow'>
+function SessionView({ view, visible, SessionProvider, renderSlot, mountView, role, width, viewportWidth, canShow }:
+  Pick<RootProps, 'SessionProvider' | 'renderSlot' | 'mountView' | 'role' | 'width' | 'viewportWidth' | 'canShow'>
   & { readonly view: SidebarSessionViewSnapshot; readonly visible: boolean }) {
   useLayoutEffect(() => mountView(view.reference), [mountView, view.reference])
   const active = visible && view.selected
   return <div className={css.session} hidden={!active} data-sidebar-right-session={view.sessionId}>
     <SessionProvider session={view.reference}>
-      {renderSlot('rightbar.session', { width, viewportWidth, canShow, active, retainTab: view.retainTab })}
+      {renderSlot('rightbar.session', { role, width, viewportWidth, canShow, active, retainTab: view.retainTab })}
     </SessionProvider>
   </div>
 }

@@ -68,10 +68,12 @@ function transition(property = 'transform') {
   }
 }
 
-async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, opener = false, keepMounted = false) {
+async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, opener = false, keepMounted = false,
+  role: 'edge' | 'plain' = 'edge') {
   const runtime = await SlotTestRuntime.create()
   runtimes.push(runtime)
-  const frame = { openRightbar: vi.fn(), closeRightbar: vi.fn(), panelInfo: runtime.panelInfo }
+  const frame = { openRightbar: vi.fn(), closeRightbar: vi.fn(), panelInfo: runtime.panelInfo,
+    arrangement: { getSnapshot: () => role === 'plain' ? 'workspace-center' : 'conversation-center', subscribe: () => () => {} } }
   const pin = vi.fn<(address: string, signal: AbortSignal) => void>()
   runtime.ctx.provide('layout', frame as never)
   runtime.ctx.provide('resources', { pin } as never)
@@ -144,7 +146,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
     runtime.slots.register({ name: 'sidebar.right.pane.tab', key: 'test/text' }, Body)
     runtime.slots.register({ name: 'sidebar.right.pane.tab.title', key: 'test/text' }, Title)
   })
-  const view = runtime.renderSlot('rightbar', { width: 420, viewportWidth, canShow })
+  const view = runtime.renderSlot('rightbar', { role, width: 420, viewportWidth, canShow })
   const registerPage = (kind: string, multiple = false): void => {
     runtime.ctx.sidebarRightTabs.register({ id: `test/${kind}`, kind, multiple, title: () => kind })
     runtime.slots.register({ name: 'sidebar.right.pane.tab', key: `test/${kind}` }, Body)
@@ -175,6 +177,25 @@ function element(container: HTMLElement, selector: string): HTMLElement {
 }
 
 describe('RightbarSeat presentation', () => {
+  it('fills a reserved plain column without chrome, hiding, or presentation reports', async () => {
+    const h = await mountSeat(1440, true, 0, false, false, 'plain')
+    act(() => { h.registerPage('files') })
+    const tab = h.open('plain.txt')
+    const panel = element(h.view.container, '[data-sidebar-right-panel]')
+    expect(panel.getAttribute('data-sidebar-right-role')).toBe('plain')
+    expect(panel.getAttribute('data-sidebar-right-panel')).toBe('push')
+    expect(panel.getAttribute('data-sidebar-right-open')).toBe('true')
+    expect(panel.getAttribute('aria-hidden')).toBeNull()
+    expect(h.view.container.querySelector('[data-sidebar-right-toggle]')).toBeNull()
+    expect(h.view.container.querySelector('[data-sidebar-right-mode]')).toBeNull()
+    // The frame reserves the column by arrangement, so the seat reports nothing.
+    expect(h.frame.openRightbar).not.toHaveBeenCalled()
+    expect(h.frame.closeRightbar).not.toHaveBeenCalled()
+    // A surface restored collapsed opens: the plain column has no collapsed state.
+    expect(h.layout().expanded).toBe(true)
+    expect(h.view.container.querySelector(`[data-sidebar-right-tab="${tab.id}"]`)).not.toBeNull()
+  })
+
   it('keeps a background retained body through standard-source registration and removal', async () => {
     const h = await mountSeat(1440, true, 0, false, true)
     const tab = h.open('retained.txt')
@@ -223,7 +244,7 @@ describe('RightbarSeat presentation', () => {
     const registry = new ShortcutRegistry('desktop', platform)
     const closeWindow = vi.fn()
     h.runtime.ctx.effect(() => registerSidebarShortcuts({ register: command => registry.register(command),
-      runtime: 'desktop' }, h.controller, h.runtime.ctx.locale.bind('sidebarRight'), closeWindow))
+      runtime: 'desktop' }, h.controller, h.runtime.ctx.locale.bind('sidebarRight'), closeWindow, () => false))
     const focusedPane = () => document.activeElement?.getAttribute('data-dockkit-pane')
       ?? document.activeElement?.getAttribute('data-dockkit-float')
     const close = (): void => {
@@ -489,7 +510,7 @@ describe('RightbarSeat presentation', () => {
     expect(h.frame.openRightbar).toHaveBeenLastCalledWith(false, true)
     const stored = h.instance.getSnapshot()
     const body = element(h.view.container, '[data-tab-body]')
-    h.view.update({ width: 420, viewportWidth: 768, canShow: true })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 768, canShow: true })
     expect(h.instance.getSnapshot()).toBe(stored)
     expect(element(h.view.container, '[data-tab-body]')).toBe(body)
     expect(h.frame.openRightbar).toHaveBeenLastCalledWith(true, false)
@@ -503,7 +524,7 @@ describe('RightbarSeat presentation', () => {
     expect(h.layout().expanded).toBe(false)
     expect(h.layout().mode).toBe('push')
     const stored = h.instance.getSnapshot()
-    h.view.update({ width: 420, viewportWidth: 1440, canShow: true })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 1440, canShow: true })
     expect(h.instance.getSnapshot()).toBe(stored)
     expect(h.layout().tabs[tab.id]).toBeDefined()
     expect(signal.aborted).toBe(false)
@@ -514,12 +535,12 @@ describe('RightbarSeat presentation', () => {
     const h = await mountSeat()
     h.open()
     // Narrowed below the automatic fullscreen width, the command closes the panel.
-    h.view.update({ width: 420, viewportWidth: 700, canShow: false })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 700, canShow: false })
     fireEvent.click(element(h.view.container, '[data-sidebar-right-mode]'))
     expect(h.layout().expanded).toBe(false)
     expect(h.layout().mode).toBe('push')
     // Widened again, the command switches the recorded mode.
-    h.view.update({ width: 420, viewportWidth: 1440, canShow: true })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 1440, canShow: true })
     act(() => { h.controller.toggleExpanded() })
     fireEvent.click(element(h.view.container, '[data-sidebar-right-mode]'))
     expect(h.layout().expanded).toBe(true)
@@ -531,9 +552,9 @@ describe('RightbarSeat presentation', () => {
     h.open()
     fireEvent.click(element(h.view.container, '[data-sidebar-right-mode]'))
     const stored = h.instance.getSnapshot()
-    h.view.update({ width: 420, viewportWidth: 500, canShow: false })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 500, canShow: false })
     expect(h.frame.openRightbar).toHaveBeenLastCalledWith(false, true)
-    h.view.update({ width: 420, viewportWidth: 1440, canShow: true })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 1440, canShow: true })
     expect(h.frame.openRightbar).toHaveBeenLastCalledWith(true, true)
     expect(h.instance.getSnapshot()).toBe(stored)
   })
@@ -542,12 +563,12 @@ describe('RightbarSeat presentation', () => {
     const h = await mountSeat()
     const tab = h.open()
     const signal = h.bodies.get(tab.id)!.tab.signal
-    h.view.update({ width: 420, viewportWidth: 900, canShow: false })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 900, canShow: false })
     expect(h.layout().expanded).toBe(false)
     expect(h.layout().tabs[tab.id]).toBeDefined()
     expect(signal.aborted).toBe(false)
     const stored = h.instance.getSnapshot()
-    h.view.update({ width: 420, viewportWidth: 1440, canShow: true })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 1440, canShow: true })
     expect(h.instance.getSnapshot()).toBe(stored)
     expect(h.layout().expanded).toBe(false)
   })
@@ -638,7 +659,7 @@ describe('RightbarSeat fullscreen entry', () => {
     const slide = transition()
     vi.spyOn(element(h.view.container, '[data-sidebar-right-panel]'), 'getAnimations').mockReturnValue([slide.animation])
     h.open()
-    h.view.update({ width: 420, viewportWidth: 500, canShow: false })
+    h.view.update({ role: 'edge', width: 420, viewportWidth: 500, canShow: false })
     expect(h.frame.openRightbar).not.toHaveBeenCalled()
     await act(async () => { slide.finish(); await slide.animation.finished })
     expect(h.frame.openRightbar).toHaveBeenCalledExactlyOnceWith(false, true)

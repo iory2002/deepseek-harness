@@ -1,5 +1,5 @@
 ---
-description: "Shell layout for the Web GUI: the three-column AppFrame whose right column is a track for an edge-anchored panel, the panel-geometry service, and theme presentation; for users and maintainers of the window chrome."
+description: "Shell layout for the Web GUI: the three-column AppFrame whose center and right seats follow a durable arrangement, the panel-geometry service, and theme presentation; for users and maintainers of the window chrome."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides the Web GUI's three-column AppFrame, edge-column widths, and `ctx.layout` presentation control. The right column concedes space before the center; its occupant renders fullscreen while the frame retains the wide-screen track underneath. The theme presenter owns color scheme, alias tokens, content font size, and document metadata. Layout state resets on reload.
+This package provides the Web GUI's three-column AppFrame, edge-column widths, and `ctx.layout` presentation control. A durable arrangement decides which surface the flexible center hosts: the shipped `conversation-center` keeps the Conversation central and docks the workspace surface right, while `workspace-center` centers the workspace surface and reserves the right column for the Conversation. The docked right column concedes space before the center; the plain one is reserved. The theme presenter owns color scheme, alias tokens, content font size, and document metadata. Layout state resets on reload; the arrangement is durable.
 
 ## Table of Contents
 
@@ -30,6 +30,18 @@ Desktop Mod+B toggles the left sidebar through the same layout action used by it
 The root slot composes the sidebar, main content, and right column. The sidebar spans 264–420px, defaults to 280px, and retains a 56px rail when collapsed; below 1024px it collapses automatically, and opening the right panel collapses a manually expanded sidebar. The right panel first opens at 45% of the viewport, then retains the user's pixel preference, capped at 70%. To protect 400px for the center, the frame first reduces the right panel to 300px, then reports insufficient room so its occupant closes it, and only then compresses the center further. Dragging has no transition delay; the right handle is absent while closed or fullscreen.
 
 Global panels occupy the root-scoped `main` keyed slot; `conversation` is the reserved key for the Conversation. `ctx.layout.selectPanel(id)` selects a registered panel, and `null` selects the Conversation without changing the current Session. No global panel is registered by the shipped composition.
+
+<a id="frame-arrangement"></a>
+### Frame arrangement
+
+`arrangement` is a durable setting of this package, chosen from General Settings ("Interface layout") or set by any profile patch on this plugin's row; the shipped default is `conversation-center`. Both arrangements render the same two seats at swapped positions, so neither surface is re-registered or rebuilt when the arrangement changes:
+
+| Arrangement | Flexible center | Right column |
+|---|---|---|
+| `conversation-center` | `main` (selected global panel, else `conversation`) | `rightbar`, owner `role: 'edge'` |
+| `workspace-center` | `rightbar`, owner `role: 'plain'` (selected global panel takes the center) | `main` key `conversation` |
+
+Under the `plain` role the right column is a permanently reserved column: the frame always sizes it from the width preference, the center absorbs the remainder down to zero, the resize handle stays available, and no track or fullscreen report is expected — the docked surface's collapse and fullscreen presentation does not exist there. Its occupant renders in normal flow, so ui-sidebar-right skips its slide, hiding, chrome, and presentation reports, and its collapse/fullscreen commands report `command.plainColumn`. Switching arrangements keeps the recorded panel width and leaves the arriving surface to open through its own seat.
 
 <a id="window-chrome-seat"></a>
 ### Window-chrome seat
@@ -54,7 +66,7 @@ The presenter consumes resolved theme snapshots and projects them onto the docum
 
 `selectPanel(id)` checks the live `main` registry before changing selection; an absent key throws and leaves the current panel intact. `beginNavigation()` returns an abort signal for an asynchronous UI navigation. A later call, a valid panel selection (including repeated selection), or layout disposal aborts that signal without cancelling underlying Session creation. Consumers check the signal before committing navigation or moving drafts.
 
-One registration declares five child slots and binds `ctx.layout` methods `selectPanel`, `toggleSidebar`, `openRightbar(track, fullscreen)`, and `closeRightbar`. One root store separates `panelInfo` selection from `layoutInfo` measurements, width preferences, and presentation reports. `ctx.layout.panelInfo` and the standard `usePanelInfo` hook share the same selection source; AppFrame subscribes to the stable layout object. The `rightbar` owner supplies actual `width`, `viewportWidth`, and normal-presentation eligibility `canShow`; insufficient room causes a deterministic close, never automatic reopening on widening. Fullscreen hides the width handle without releasing a track the occupant retains. AppFrame keeps the column containers mounted. The right column's root controller renders `rightbar.session` through `SessionProvider` only while the Conversation is selected; its unmount report releases the track. The independent title component uses the selected Session title only while the Conversation is visible, with the build-configured product title or localized `common.brand.localBuild` as its fallback; locale revisions update that fallback. The theme presenter is a second effect: pure DOM writes from resolved snapshots — initial state through the getter once, then event-driven only, with no React path. It applies palette, font-size, and token variables before measuring the rendered background as the single color authority. Fullscreen presentation suppresses grid and handle transitions; its occupant reports the new columns only after covering the frame. Fullscreen exit keeps transitions suppressed while the frame installs its destination geometry: close removes the right track, and restore retains it. Subsequent normal geometry actions restore ordinary transitions.
+One registration declares five child slots and binds `ctx.layout` methods `selectPanel`, `toggleSidebar`, `openRightbar(track, fullscreen)`, and `closeRightbar`. One root store separates `panelInfo` selection from `layoutInfo` measurements, width preferences, the arrangement, and presentation reports. `ctx.layout.panelInfo` and `ctx.layout.arrangement` are live views of that store, shared with the standard `usePanelInfo` hook; AppFrame subscribes to the stable layout object and picks the arrangement's render plan and geometry role from it. The frame binds the store's arrangement to the plugin's Host-backed settings section, adopting an accepted value and writing a local choice through it; before the Host accepts a section, or while it refuses writes, the arrangement stays process-local. The `rightbar` owner supplies `role`, actual `width`, `viewportWidth`, and normal-presentation eligibility `canShow`; insufficient room causes a deterministic close, never automatic reopening on widening. Fullscreen hides the width handle without releasing a track the occupant retains. AppFrame keeps the column containers mounted. The right column's root controller renders `rightbar.session` through `SessionProvider` only while the Conversation is selected; its unmount report releases the track. The independent title component uses the selected Session title only while the Conversation is visible, with the build-configured product title or localized `common.brand.localBuild` as its fallback; locale revisions update that fallback. The theme presenter is a second effect: pure DOM writes from resolved snapshots — initial state through the getter once, then event-driven only, with no React path. It applies palette, font-size, and token variables before measuring the rendered background as the single color authority. Fullscreen presentation suppresses grid and handle transitions; its occupant reports the new columns only after covering the frame. Fullscreen exit keeps transitions suppressed while the frame installs its destination geometry: close removes the right track, and restore retains it. Subsequent normal geometry actions restore ordinary transitions.
 
 </details>
 
@@ -90,6 +102,8 @@ None; this package neither assembles nor sends a provider request.
 These limits define the current layout behavior. They are current package constraints, not a general window-manager comparison or a task backlog.
 
 - **Panel geometry is transient** — reload restores the sidebar default and the right panel hidden; each dragged width is one frame-wide preference, not a per-Session fact.
+- **The arrangement is one profile-wide setting** — it is not per Session and not per window: every window of one profile renders the accepted value, so two windows never show different arrangements.
+- **Arrangement switches keep recorded panel state** — moving to `workspace-center` opens a surface that was collapsed, and returning leaves it open with its width; neither direction rewrites the surface's own recorded presentation beyond that.
 - **Extremely narrow windows** — after the right panel closes, the center may still fall below 400px; the left 56px rail remains.
 - **Track and panel travel on one shared curve only while animating** — during a discrete open/close the frame sets `data-animating` and its track transition and the occupant's slide read the same duration and easing variables; an occupant that used its own would detach the panel's edge from the conversation's while squeezing. Drags and instant presentation switches run transition-free, so the curve does not cover them.
 - **No scroll anchoring during squeeze reflow** — layout changes may move the reader's viewport.

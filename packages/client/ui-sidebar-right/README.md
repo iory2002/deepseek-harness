@@ -36,6 +36,8 @@ The layout itself — the split tree, its operations, the drag gestures, the flo
 <a id="presentations"></a>
 ## Presentations
 
+The frame hands this seat a `role`. Under the shipped `edge` role the surface is the docked right panel described below; under the `plain` role — the workspace-center frame arrangement — the same content tree renders in normal flow inside a permanently reserved column: it never slides, never hides, never covers the frame, has no collapse or fullscreen control, forces a restored surface open, and reports nothing back to the frame, because the frame sizes that column by arrangement rather than by an occupant report. The collapse and fullscreen commands report `command.plainColumn` under that role, while splitting and the docking kit stay available.
+
 Normal and fullscreen presentations share the same content tree, so switching does not remount tabs. The normal panel anchors to the right column; fullscreen covers the viewport while retaining the wide-screen columns underneath. Opening below 768px uses fullscreen automatically; leaving fullscreen on a narrow viewport closes the panel, and widening does not reopen a closed panel. A fullscreen opening keeps the underlying columns unchanged until its slide finishes, then prepares the normal track without a column transition. Before a fullscreen panel retreats, closing prepares a full-width conversation and restoring prepares the normal right track; the background does not animate during the retreat.
 
 | Mode | The track | The panel |

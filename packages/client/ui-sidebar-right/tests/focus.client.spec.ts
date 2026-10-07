@@ -20,6 +20,8 @@ import { observeSidebarFocus, sidebarTargetFromElement } from '../src/client/foc
 
 const SESSION = 'focus-session' as SessionId
 const releases: Array<() => void> = []
+/** Docked-right arrangement: the shipped composition, where both commands exist. */
+const edgeColumn = (): boolean => false
 afterEach(() => { cleanup(); for (const release of releases.splice(0).reverse()) release(); document.body.replaceChildren() })
 
 function harness() {
@@ -368,7 +370,7 @@ describe('sidebar keyboard commands', () => {
     const h = harness(), commands = new Map<string, ShortcutCommand>()
     releases.push(registerSidebarShortcuts({ runtime: 'web', register: (command) => {
       commands.set(command.id, command); return () => { commands.delete(command.id) }
-    } }, h.controller, makeTranslate(en), vi.fn()))
+    } }, h.controller, makeTranslate(en), vi.fn(), edgeColumn))
     const context = { target: null, region: 'page', modal: null } as const
     expect(commands.get('page.close')!.resolve(context)).toMatchObject({ status: 'blocked', reason: en['command.noFocus'] })
     h.controller.openTab('files')
@@ -387,7 +389,7 @@ describe('sidebar keyboard commands', () => {
     const h = harness(), commands = new Map<string, ShortcutCommand>(), closeWindow = vi.fn()
     releases.push(registerSidebarShortcuts({ runtime: 'desktop', register: (command) => {
       commands.set(command.id, command); return () => { commands.delete(command.id) }
-    } }, h.controller, makeTranslate(en), closeWindow))
+    } }, h.controller, makeTranslate(en), closeWindow, edgeColumn))
     h.controller.openTabFromTarget('files', h.controller.commandTarget(null)!)
     h.controller.close(h.controller.active()!.id)
     const surface = h.store.getSnapshot().bySession[SESSION]!
@@ -406,7 +408,7 @@ describe('sidebar keyboard commands', () => {
     const h = harness()
     const registry = new ShortcutRegistry('desktop', platform)
     releases.push(registerSidebarShortcuts({ register: command => registry.register(command),
-      runtime: registry.runtime }, h.controller, makeTranslate(en), vi.fn()))
+      runtime: registry.runtime }, h.controller, makeTranslate(en), vi.fn(), edgeColumn))
     const consume = vi.fn()
     const gesture = { code: 'KeyB', meta: platform === 'macos', control: platform === 'windows', alt: true,
       shift: false, repeat: false, composing: false, defaultPrevented: false }
@@ -435,7 +437,7 @@ describe('sidebar keyboard commands', () => {
     const h = harness()
     const registry = new ShortcutRegistry('desktop', 'windows')
     releases.push(registerSidebarShortcuts({ register: command => registry.register(command),
-      runtime: registry.runtime }, h.controller, makeTranslate(en), vi.fn()))
+      runtime: registry.runtime }, h.controller, makeTranslate(en), vi.fn(), edgeColumn))
     const pane = h.paneElement()
     pane.focus()
     const context = { target: pane, region: 'page' as const, modal: null }
@@ -454,7 +456,7 @@ describe('sidebar keyboard commands', () => {
     releases.push(registerSidebarShortcuts({ runtime: 'desktop', register: (command) => {
       commands.set(command.id, command)
       return () => { commands.delete(command.id) }
-    } }, h.controller, makeTranslate(en), vi.fn()))
+    } }, h.controller, makeTranslate(en), vi.fn(), edgeColumn))
     const split = commands.get('pane.split')!
     const fullscreen = commands.get('pane.fullscreen.toggle')!
     const toggle = commands.get('sidebar.right.toggle')!
@@ -487,6 +489,23 @@ describe('sidebar keyboard commands', () => {
     expect(fullscreen.resolve({ ...context, target: floated })).toMatchObject({ status: 'blocked', reason: en['command.float'] })
   })
 
+  it('blocks collapse and fullscreen while the surface fills a plain reserved column', () => {
+    const h = harness()
+    const commands = new Map<string, ShortcutCommand>()
+    releases.push(registerSidebarShortcuts({ runtime: 'desktop', register: (command) => {
+      commands.set(command.id, command)
+      return () => { commands.delete(command.id) }
+    } }, h.controller, makeTranslate(en), vi.fn(), () => true))
+    const pane = h.paneElement()
+    pane.focus()
+    const context = { target: pane, region: 'page' as const, modal: null }
+    const blocked = { status: 'blocked', reason: en['command.plainColumn'] }
+    expect(commands.get('sidebar.right.toggle')!.resolve(context)).toMatchObject(blocked)
+    expect(commands.get('pane.fullscreen.toggle')!.resolve(context)).toMatchObject(blocked)
+    // Splitting stays available: the column is reserved, not collapsed.
+    expect(commands.get('pane.split')!.resolve(context).status).toBe('handled')
+  })
+
   it.each([
     { platform: 'macos', keys: ['Shift+Meta+B', 'Meta+\\', 'Alt+Meta+Enter', 'Alt+Meta+W', undefined] },
     { platform: 'windows', keys: ['Control+Shift+B', 'Control+\\', 'Control+Alt+Enter', 'Control+Alt+W', 'Control+Alt+R'] },
@@ -495,7 +514,7 @@ describe('sidebar keyboard commands', () => {
     const h = harness()
     const registry = new ShortcutRegistry('web', platform)
     releases.push(registerSidebarShortcuts({ register: command => registry.register(command),
-      runtime: registry.runtime }, h.controller, makeTranslate(en), vi.fn()))
+      runtime: registry.runtime }, h.controller, makeTranslate(en), vi.fn(), edgeColumn))
     expect(registry.catalog.getSnapshot().map(row => row.id)).toEqual([
       'sidebar.right.toggle', 'pane.split', 'pane.fullscreen.toggle', 'page.close', 'page.refresh',
     ])
@@ -509,7 +528,7 @@ describe('page close and refresh', () => {
     h.controller.split()
     const registry = new ShortcutRegistry('desktop', platform)
     const closeWindow = vi.fn()
-    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
+    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow, edgeColumn))
     const gesture = { code: 'KeyW', meta: platform === 'macos', control: platform === 'windows', alt: false,
       shift: false, repeat: false, composing: false, defaultPrevented: false }
     const first = Object.values(h.layout().tabs)[0]!
@@ -529,7 +548,7 @@ describe('page close and refresh', () => {
     const h = harness()
     const registry = new ShortcutRegistry('desktop', platform)
     const closeWindow = vi.fn()
-    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
+    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow, edgeColumn))
     h.controller.openTab('files')
     const files = h.controller.active()!.id
     const element = h.tabElement(files)
@@ -564,7 +583,7 @@ describe('page close and refresh', () => {
     const h = harness()
     const registry = new ShortcutRegistry('desktop', platform)
     const closeWindow = vi.fn(), closeModal = vi.fn()
-    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
+    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow, edgeColumn))
     render(createElement(Modal, { open: true, title: 'Settings', shortcutModal: 'settings', closeLabel: 'Close', onClose: closeModal }))
     const context = { target: document.activeElement, region: 'page' as const, modal: 'settings' }
     const gesture = { code: 'KeyW', meta: platform === 'macos', control: platform !== 'macos', alt: false,
@@ -586,7 +605,7 @@ describe('page close and refresh', () => {
     const tab = h.controller.active()!.id
     const closeWindow = vi.fn()
     const registry = new ShortcutRegistry('desktop', 'macos')
-    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
+    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow, edgeColumn))
     const off = h.controller.registerCloseHandler('terminal', () => { throw new Error('cleanup failed') })
     releases.push(off)
     const context = { target: h.tabElement(tab), region: 'page' as const, modal: null }
