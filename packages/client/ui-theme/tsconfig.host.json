@@ -7,6 +7,7 @@
   },
   "files": [
     "src/boot-theme.ts",
+    "src/font-catalog.ts",
     "src/index.ts",
     "src/theme-settings.ts"
   ],

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-29-per-token-font-overrides.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-29-per-token-font-overrides.md
+/agent-note-per-token-font-overrides-behind-a-settings-table:
+  en: b6fe9f8778aee476
+  zh: 9295b5fc45602e11
+/agent-note-per-token-font-overrides-behind-a-settings-table/problem:
+  en: c89f6bda7923a67a
+  zh: b13ededd4dcc653b
+/agent-note-per-token-font-overrides-behind-a-settings-table/decision:
+  en: b94cea2a28dce18f
+  zh: b9e8bd4cf82bf462
+/agent-note-per-token-font-overrides-behind-a-settings-table/alternatives-considered:
+  en: 170b8674d88027b2
+  zh: 6ef745b770e67823
+/agent-note-per-token-font-overrides-behind-a-settings-table/consequences:
+  en: 2eb0c4c032703501
+  zh: b875a06a454d501a

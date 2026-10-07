@@ -68,8 +68,9 @@ describe('ThemeRuntime', () => {
 
   it('adopts a published Host font size without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 12 }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'system', fontSize: 12, workspaceFontSize: 16 }, revision: 1, writable: true })
     expect(theme.getTheme().fontSize).toBe(12)
+    expect(theme.getTheme().workspaceFontSize).toBe(16)
     expect(events).toHaveLength(1)
     expect(host.set).not.toHaveBeenCalled()
   })
@@ -92,19 +93,76 @@ describe('ThemeRuntime', () => {
 
   it('adopts a published Host section without writing it back', () => {
     const { theme, events, host } = make()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14 }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, workspaceFontSize: 14 }, revision: 1, writable: true })
     expect(theme.getTheme().preference).toBe('dark')
     expect(events).toHaveLength(1)
     expect(host.set).not.toHaveBeenCalled()
-    host.publish({ value: { preference: 'dark', fontSize: 14 }, revision: 2 })
+    host.publish({ value: { preference: 'dark', fontSize: 14, workspaceFontSize: 14 }, revision: 2 })
     expect(events).toHaveLength(1)
   })
 
   it('adopts a section already standing at construction', () => {
     const host = stubConfigForm<ThemeSettings>()
-    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14 }, revision: 1, writable: true })
+    host.publish({ status: 'ready', value: { preference: 'dark', fontSize: 14, workspaceFontSize: 14 }, revision: 1, writable: true })
     const { theme } = make(host)
     expect(theme.getTheme().preference).toBe('dark')
+  })
+
+  it('pins, releases, and resets typography tokens through the settings scope', () => {
+    const { theme, host } = make()
+    theme.setFontOverride('--dsw-font-xs-13', { size: 15, family: 'serif' })
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-xs-13', size: 15, family: 'serif' }])
+    expect(host.set).toHaveBeenLastCalledWith('fonts', [{ token: '--dsw-font-xs-13', size: 15, family: 'serif' }])
+    // The snapshot's projection carries the rebuilt shorthand and its sub-tokens.
+    expect(theme.getTheme().fontTokens['--dsw-font-xs-13-font-size']).toBe('15px')
+    expect(theme.getTheme().fontTokens['--dsw-font-xs-13-strong']).toContain('500 15px/23px')
+
+    // A later pin replaces the same token instead of appending a second entry.
+    theme.setFontOverride('--dsw-font-xs-13', { size: 16 })
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-xs-13', size: 16 }])
+
+    theme.setFontOverride('--dsw-font-family', { family: 'code' })
+    expect(theme.getTheme().fontOverrides).toHaveLength(2)
+
+    theme.clearFontOverride('--dsw-font-xs-13')
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-family', family: 'code' }])
+    expect(host.set).toHaveBeenLastCalledWith('fonts', [{ token: '--dsw-font-family', family: 'code' }])
+    // Releasing an unset token and the last token both stay quiet on the wire.
+    theme.clearFontOverride('--dsw-font-xs-13')
+    expect(host.set).toHaveBeenCalledTimes(4)
+    theme.clearFontOverride('--dsw-font-family')
+    expect(host.unset).toHaveBeenCalledWith('fonts')
+    expect(theme.getTheme().fontOverrides).toEqual([])
+    expect(theme.getTheme().fontTokens).toEqual({})
+  })
+
+  it('clamps a pinned size and refuses a token outside the catalog', () => {
+    const { theme } = make()
+    theme.setFontOverride('--dsw-font-markdown-h1', { size: 999 })
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-markdown-h1', size: 32 }])
+    expect(() => { theme.setFontOverride('--dsw-font-nope', { size: 20 }) })
+      .toThrow('font token "--dsw-font-nope" is not in the settings catalog')
+  })
+
+  it('releases every pin at once, and stays quiet without any', () => {
+    const { theme, host } = make()
+    theme.setFontOverride('--dsw-font-xs-13', { size: 15 })
+    theme.resetFontOverrides()
+    expect(host.unset).toHaveBeenCalledWith('fonts')
+    expect(theme.getTheme().fontOverrides).toEqual([])
+    theme.resetFontOverrides()
+    expect(host.unset).toHaveBeenCalledTimes(1)
+  })
+
+  it('adopts published pins and skips a re-publish of the same list', () => {
+    const { theme, host } = make()
+    host.publish({ status: 'ready', writable: true, revision: 1,
+      value: { preference: 'system', fontSize: 14, workspaceFontSize: 14, fonts: [{ token: '--dsw-font-xxs-12', size: 13 }] } })
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-xxs-12', size: 13 }])
+    const before = theme.getTheme()
+    host.publish({ status: 'ready', writable: true, revision: 2,
+      value: { preference: 'system', fontSize: 14, workspaceFontSize: 14, fonts: [{ token: '--dsw-font-xxs-12', size: 13 }] } })
+    expect(theme.getTheme()).toBe(before)
   })
 
   it('throws on unknown setTheme ids, duplicate registration, and the system id', () => {

@@ -10,7 +10,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { FontSizeRow } from '../src/client/FontSizeRow.tsx'
 import type { FontSizeRowComponentProps } from '../src/client/FontSizeRow.tsx'
-import { createFontSizeRowStore } from '../src/client/settings-store.ts'
+import { createTypographyStore } from '../src/client/settings-store.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
@@ -23,6 +23,8 @@ const COPY: Record<string, string> = {
   'fontSize.description': 'Only affects conversation content',
   'fontSize.increase': 'Increase font size',
   'fontSize.decrease': 'Decrease font size',
+  'workspaceFontSize.title': 'Workspace font size',
+  'workspaceFontSize.description': 'Only affects files opened in the workspace',
 }
 
 /** Empty global standard-kit hooks (the row reads neither). */
@@ -42,10 +44,10 @@ type AttentionSnapshot = Parameters<Parameters<FontSizeRowComponentProps['useSes
 const noAttention: AttentionSnapshot = new Map()
 const useSessionStatus: FontSizeRowComponentProps['useSessionStatus'] = selector => selector(noAttention)
 
-function mount(fontSize = 14) {
-  // Real store instance — the sanctioned zero-machinery path for tests.
-  const store = createFontSizeRowStore().create()
-  store.actions.sync(fontSize, 0)
+function mount(fontSize = 14, kind: 'content' | 'workspace' = 'content') {
+  // Real store instance 鈥?the sanctioned zero-machinery path for tests.
+  const store = createTypographyStore().create()
+  store.actions.sync(fontSize, fontSize, [], 0)
   const setFontSize = vi.fn()
   const props: FontSizeRowComponentProps = {
     useSessions: emptySessions(),
@@ -55,6 +57,7 @@ function mount(fontSize = 14) {
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     t: (key: string) => COPY[key] ?? key,
+    kind,
     setFontSize,
   }
   render(<FontSizeRow {...props} />)
@@ -80,17 +83,29 @@ describe('FontSizeRow', () => {
     expect(b.setFontSize).toHaveBeenCalledWith(15)
     // No store write yet: the display is unchanged.
     expect(screen.getByText('14')).toBeDefined()
-    act(() => { b.store.actions.sync(15, 1) })
+    act(() => { b.store.actions.sync(15, 14, [], 1) })
     expect(screen.getByText('15')).toBeDefined()
     fireEvent.click(arrow('Decrease font size'))
     expect(b.setFontSize).toHaveBeenCalledWith(14)
+  })
+
+  it('renders the workspace axis from its own mirrored value', () => {
+    const b = mount(18, 'workspace')
+    expect(screen.getByText('Workspace font size')).toBeDefined()
+    expect(screen.getByText('Only affects files opened in the workspace')).toBeDefined()
+    expect(screen.getByText('18')).toBeDefined()
+    fireEvent.click(arrow('Decrease font size'))
+    expect(b.setFontSize).toHaveBeenCalledWith(17)
+    // The content axis keeps its own value in the shared mirror.
+    act(() => { b.store.actions.sync(16, 17, [], 1) })
+    expect(screen.getByText('17')).toBeDefined()
   })
 
   it('disables the outward arrow at each bound', () => {
     const b = mount(21)
     fireEvent.click(arrow('Increase font size'))
     expect(b.setFontSize).toHaveBeenCalledWith(22)
-    act(() => { b.store.actions.sync(22, 1) })
+    act(() => { b.store.actions.sync(22, 22, [], 1) })
     expect(screen.getByText('22')).toBeDefined()
     expect(arrow('Increase font size').disabled).toBe(true)
     expect(arrow('Decrease font size').disabled).toBe(false)
@@ -98,7 +113,7 @@ describe('FontSizeRow', () => {
     const c = mount(11)
     fireEvent.click(arrow('Decrease font size'))
     expect(c.setFontSize).toHaveBeenCalledWith(10)
-    act(() => { c.store.actions.sync(10, 1) })
+    act(() => { c.store.actions.sync(10, 10, [], 1) })
     expect(screen.getByText('10')).toBeDefined()
     expect(arrow('Increase font size').disabled).toBe(false)
     expect(arrow('Decrease font size').disabled).toBe(true)

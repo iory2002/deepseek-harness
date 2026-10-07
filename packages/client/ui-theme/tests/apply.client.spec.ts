@@ -8,11 +8,12 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, SETTINGS_NS } from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { AppearanceRowInjected, FontSizeRowInjected, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { AppearanceRowInjected, FontsDialogActions, FontSizeRowInjected, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
 import { FontSizeRow } from '../src/client/FontSizeRow.tsx'
-import type { createAppearanceRowStore, createFontSizeRowStore } from '../src/client/settings-store.ts'
+import { FontsRow } from '../src/client/FontsRow.tsx'
+import type { createAppearanceRowStore, createTypographyStore } from '../src/client/settings-store.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -77,12 +78,21 @@ function faceOf(slots: SlotRegistry) {
   return { entry, instance, face }
 }
 
-/** The same choreography for the font-size row entry. */
-function fontSizeFaceOf(slots: SlotRegistry) {
-  const entry = slots.entries(SLOT).find(e => e.component === FontSizeRow)!
-  const handle = entry.store as ReturnType<typeof createFontSizeRowStore>
+/** The same choreography for one font-size row entry, selected by its axis id. */
+function fontSizeFaceOf(slots: SlotRegistry, id: 'font-size' | 'workspace-font-size' = 'font-size') {
+  const entry = slots.entries(SLOT).find(e => e.component === FontSizeRow && e.options.id === id)!
+  const handle = entry.store as ReturnType<typeof createTypographyStore>
   const instance = handle.create()
   const face = (entry.inject as unknown as (a: typeof instance.actions) => FontSizeRowInjected)(instance.actions)
+  return { entry, instance, face }
+}
+
+/** The font table's own write face. */
+function fontTableFaceOf(slots: SlotRegistry) {
+  const entry = slots.entries(SLOT).find(e => e.component === FontsRow)!
+  const handle = entry.store as ReturnType<typeof createTypographyStore>
+  const instance = handle.create()
+  const face = (entry.inject as unknown as (a: typeof instance.actions) => FontsDialogActions)(instance.actions)
   return { entry, instance, face }
 }
 
@@ -101,9 +111,16 @@ describe('ui-theme apply', () => {
     expect(before.locale.bind(SETTINGS_NS)('appearance.title')).toBe('Appearance')
     const entry = before.slots.entries(SLOT).find(e => e.component === AppearanceRow)!
     expect(entry.options).toMatchObject({ id: 'appearance', order: 10 })
-    const fontEntry = before.slots.entries(SLOT).find(e => e.component === FontSizeRow)!
+    const fontEntry = before.slots.entries(SLOT).find(e => e.options.id === 'font-size')!
     expect(fontEntry.options).toMatchObject({ id: 'font-size', order: 11 })
     expect(fontEntry.locale).toBe(SETTINGS_NS)
+    const workspaceEntry = before.slots.entries(SLOT).find(e => e.options.id === 'workspace-font-size')!
+    expect(workspaceEntry.options).toMatchObject({ id: 'workspace-font-size', order: 12 })
+    expect(workspaceEntry.component).toBe(FontSizeRow)
+    const tableEntry = before.slots.entries(SLOT).find(e => e.options.id === 'font-table')!
+    expect(tableEntry.options).toMatchObject({ id: 'font-table', order: 13 })
+    expect(tableEntry.component).toBe(FontsRow)
+    expect(tableEntry.locale).toBe(SETTINGS_NS)
 
     const after = await bench()
     const fiber = after.ctx.plugin({ inject: [...inject], apply })
@@ -142,15 +159,51 @@ describe('ui-theme apply', () => {
     const theme = b.ctx.get('theme') as ThemeRuntime
     // An event ahead of any inject hits the unbound-actions arm.
     theme.setFontSize(16)
+    theme.setWorkspaceFontSize(18)
 
     const { instance, face } = fontSizeFaceOf(b.slots)
     // The inject-time re-sync sealed the init window: the mirror is current.
     expect(instance.getSnapshot().fontSize).toBe(16)
+    expect(instance.getSnapshot().workspaceFontSize).toBe(18)
 
     face.setFontSize(12)
     expect(theme.getTheme().fontSize).toBe(12)
     expect(instance.getSnapshot().fontSize).toBe(12)
-    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
+    expect(instance.getSnapshot().workspaceFontSize).toBe(18)
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(3) })
+
+    const content = fontSizeFaceOf(b.slots)
+    expect(content.face.kind).toBe('content')
+    const workspace = fontSizeFaceOf(b.slots, 'workspace-font-size')
+    expect(workspace.face.kind).toBe('workspace')
+    workspace.face.setFontSize(20)
+    expect(theme.getTheme().workspaceFontSize).toBe(20)
+    expect(workspace.instance.getSnapshot().workspaceFontSize).toBe(20)
+    expect(theme.getTheme().fontSize).toBe(12)
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(4) })
+  })
+
+  it('routes the font table writes through the theme service', async () => {
+    const b = await bench()
+    declareItems(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const theme = b.ctx.get('theme') as ThemeRuntime
+    const { instance, face } = fontTableFaceOf(b.slots)
+
+    face.setFontOverride('--dsw-font-xs-13', { size: 15, family: 'serif' })
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-xs-13', size: 15, family: 'serif' }])
+    expect(theme.getTheme().fontTokens['--dsw-font-xs-13-font-size']).toBe('15px')
+    expect(instance.getSnapshot().fonts).toEqual([{ token: '--dsw-font-xs-13', size: 15, family: 'serif' }])
+
+    face.setFontOverride('--dsw-font-family', { family: 'code' })
+    expect(theme.getTheme().fontOverrides).toHaveLength(2)
+
+    face.clearFontOverride('--dsw-font-xs-13')
+    expect(theme.getTheme().fontOverrides).toEqual([{ token: '--dsw-font-family', family: 'code' }])
+
+    face.resetFontOverrides()
+    expect(theme.getTheme().fontOverrides).toEqual([])
+    expect(theme.getTheme().fontTokens).toEqual({})
   })
 
   it('loads Host settings at boot, refreshes its namespace, and keeps remote browsers process-local', async () => {
@@ -218,7 +271,7 @@ describe('ui-theme apply', () => {
     const b = await bench()
     const host = declareItems(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
-    expect(b.slots.entries(SLOT)).toHaveLength(2)
+    expect(b.slots.entries(SLOT)).toHaveLength(4)
 
     // Collapse: the declarer dies, the cascade removes our entries while the
     // apply closure still holds its (now stale) disposers.
@@ -229,6 +282,7 @@ describe('ui-theme apply', () => {
     await Promise.resolve()
     expect(b.slots.entries(SLOT).some(e => e.component === AppearanceRow)).toBe(true)
     expect(b.slots.entries(SLOT).some(e => e.component === FontSizeRow)).toBe(true)
+    expect(b.slots.entries(SLOT).some(e => e.component === FontsRow)).toBe(true)
   })
 
   it('teardown removes the rows and the dictionaries; teardown without a declaration is quiet', async () => {
@@ -236,7 +290,7 @@ describe('ui-theme apply', () => {
     declareItems(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.slots.entries(SLOT)).toHaveLength(2)
+    expect(b.slots.entries(SLOT)).toHaveLength(4)
     await fiber.dispose()
     expect(b.slots.entries(SLOT)).toHaveLength(0)
     // Dictionary disposal: translation falls back to the bare key.

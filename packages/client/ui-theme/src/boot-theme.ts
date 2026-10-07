@@ -6,7 +6,10 @@
  */
 
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
-import { DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, type ThemePreference } from './theme-settings.ts'
+import { fontOverrideLayer, type FontOverride } from './font-catalog.ts'
+import {
+  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, DEFAULT_WORKSPACE_FONT_SIZE, type ThemePreference,
+} from './theme-settings.ts'
 
 const LIGHT_BACKGROUND = '#fff'
 const DARK_BACKGROUND = '#151517'
@@ -20,8 +23,17 @@ function bootThemeStyle(preference: ThemePreference): string {
   return `${light}@media(prefers-color-scheme:dark){${dark}}`
 }
 
-/** Build the body script that installs the palette selector and content size. */
-function bootThemeBodyScript(preference: ThemePreference, fontSize: number): string {
+/** Build the body script that installs the palette selector, both font-size axes, and pinned tokens. */
+function bootThemeBodyScript(
+  preference: ThemePreference,
+  fontSize: number,
+  workspaceFontSize: number,
+  overrides: readonly FontOverride[],
+): string {
+  const pinned = fontOverrideLayer(overrides)
+  const writes = Object.entries(pinned)
+    .map(([token, value]) => `  document.body.style.setProperty(${JSON.stringify(token)}, ${JSON.stringify(value)})`)
+    .join('\n')
   return `(() => {
   const preference = ${JSON.stringify(preference)}
   const systemDark = preference === 'system'
@@ -31,23 +43,30 @@ function bootThemeBodyScript(preference: ThemePreference, fontSize: number): str
   document.documentElement.dataset.dsThemeSource = preference
   document.body.toggleAttribute('data-ds-dark-theme', dark)
   document.body.style.setProperty('--dsh-content-font-size', ${JSON.stringify(`${fontSize}px`)})
+  document.body.style.setProperty('--dsh-workspace-font-size', ${JSON.stringify(`${workspaceFontSize}px`)})
+${writes}
 })()`
 }
 
 /**
  * Theme bootstrap rows: head CSS colors the document canvas before
- * first paint, then the body script installs the palette selector and font
- * size before the shell mount and module script.
+ * first paint, then the body script installs the palette selector, both
+ * font-size axes, and every pinned typography token before the shell mount and
+ * module script.
  * @param preference - Current Host-backed built-in preference.
  * @param fontSize - Current Host-backed content font size in px.
+ * @param workspaceFontSize - Current Host-backed workspace document font size in px.
+ * @param overrides - Current Host-backed pinned typography tokens.
  * @returns head and body script rows in execution order.
  */
 export function bootThemeInjections(
   preference: ThemePreference = DEFAULT_PREFERENCE,
   fontSize: number = DEFAULT_FONT_SIZE,
+  workspaceFontSize: number = DEFAULT_WORKSPACE_FONT_SIZE,
+  overrides: readonly FontOverride[] = [],
 ): IndexInjection[] {
   return [
     { kind: 'style', text: bootThemeStyle(preference) },
-    { kind: 'script', placement: 'body', text: bootThemeBodyScript(preference, fontSize) },
+    { kind: 'script', placement: 'body', text: bootThemeBodyScript(preference, fontSize, workspaceFontSize, overrides) },
   ]
 }

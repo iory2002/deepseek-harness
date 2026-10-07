@@ -1,12 +1,20 @@
 /* The preview takes the pane's definite height outright, so the header stays
    put while the body below owns the remaining height. A renderer may replace
-   the body's scrolling role with an inner scrollport. */
+   the body's scrolling role with an inner scrollport.
+
+   Documents read at the workspace's own typography axis: rebinding the content
+   size here makes this root the host of the shared typography ladder
+   (ui-theme's gradient-shadow-text.css declares it on `body` and on this
+   marker), so plain text, code, Markdown headings and tables, and office
+   headers all recompute from the workspace size while the tab strip, files
+   tree, and other workspace chrome keep the content size. */
 .preview {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  --dsh-content-font-size: var(--dsh-workspace-font-size, 14px);
 }
 
 /* One 38px row flush under the pane's strip: the path, then the type's

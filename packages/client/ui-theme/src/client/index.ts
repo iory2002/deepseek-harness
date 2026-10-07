@@ -18,20 +18,42 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { AppearanceRowInjected } from './AppearanceRow.tsx'
 import { AppearanceRow } from './AppearanceRow.tsx'
-import type { FontSizeRowInjected } from './FontSizeRow.tsx'
+import type { FontSizeAxis, FontSizeRowInjected } from './FontSizeRow.tsx'
 import { FontSizeRow } from './FontSizeRow.tsx'
-import { createAppearanceRowStore, createFontSizeRowStore } from './settings-store.ts'
+import { FontsRow } from './FontsRow.tsx'
+import type { FontsDialogActions } from './FontsDialog.tsx'
+import { createAppearanceRowStore, createTypographyStore } from './settings-store.ts'
 import { installThemeStyles } from './styles.ts'
 import { en, zh, type ThemeKey } from './locales.ts'
 import {
-  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, FONT_SIZE_FIELD, FONT_SIZE_MAX, FONT_SIZE_MIN,
-  isThemePreference, THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE,
+  DEFAULT_FONT_SIZE, DEFAULT_PREFERENCE, DEFAULT_WORKSPACE_FONT_SIZE, FONT_OVERRIDES_FIELD, FONT_SIZE_FIELD, FONT_SIZE_MAX,
+  FONT_SIZE_MIN, isThemePreference, THEME_PREFERENCE_FIELD, THEME_SETTINGS_NAMESPACE, WORKSPACE_FONT_SIZE_FIELD,
   type ThemePreference, type ThemeSettings,
 } from '../theme-settings.ts'
+import {
+  clampFontItemSize, fontOverrideLayer, FONT_ITEM_BY_TOKEN, type FontFamilyId, type FontOverride,
+} from '../font-catalog.ts'
+
+/** Whether two pinned-token lists carry the same choices in the same order. */
+function sameOverrides(left: readonly FontOverride[], right: readonly FontOverride[]): boolean {
+  if (left.length !== right.length) return false
+  return left.every((entry, index) => {
+    const other = right[index]
+    return other !== undefined && entry.token === other.token && entry.size === other.size && entry.family === other.family
+  })
+}
+
+/** Insert or replace one token's pinned choice, keeping the catalog's table order. */
+function upsertOverride(overrides: readonly FontOverride[], next: FontOverride): readonly FontOverride[] {
+  const replaced = overrides.map(entry => entry.token === next.token ? next : entry)
+  return replaced.some(entry => entry.token === next.token) ? replaced : [...overrides, next]
+}
 
 export type { AppearanceRowComponentProps, AppearanceRowInjected } from './AppearanceRow.tsx'
-export type { FontSizeRowComponentProps, FontSizeRowInjected } from './FontSizeRow.tsx'
-export type { AppearanceRowState, FontSizeRowState } from './settings-store.ts'
+export type { FontSizeAxis, FontSizeRowComponentProps, FontSizeRowInjected } from './FontSizeRow.tsx'
+export type { FontsRowComponentProps } from './FontsRow.tsx'
+export type { FontsDialogActions, FontsDialogProps } from './FontsDialog.tsx'
+export type { AppearanceRowState, TypographyState } from './settings-store.ts'
 export type { ThemeKey } from './locales.ts'
 export type { ThemePreference, ThemeSettings } from '../theme-settings.ts'
 
@@ -82,6 +104,16 @@ export interface ThemeSnapshot {
   preference: ThemePreference
   /** Conversation content font size in px (integer within FONT_SIZE_MIN..FONT_SIZE_MAX). */
   fontSize: number
+  /** Workspace document font size in px (integer within FONT_SIZE_MIN..FONT_SIZE_MAX). */
+  workspaceFontSize: number
+  /** Pinned typography tokens from the font settings table, in table order. */
+  fontOverrides: readonly FontOverride[]
+  /**
+   * The pinned tokens projected to CSS: token name → value, as the document
+   * presenter and the boot script write them. Resolved here because the catalog
+   * is this package's vocabulary.
+   */
+  fontTokens: Readonly<Record<string, string>>
   /**
    * The resolved active theme (`system` resolved via prefers-color-scheme)
    * with override layers folded into its tokens (seq order, later layers win
@@ -162,6 +194,8 @@ export class ThemeRuntime {
   private themes: ThemeDefinition[] = [...BUILTIN_THEMES]
   private preference: ThemePreference
   private fontSize: number = bootstrapFontSize()
+  private workspaceFontSize: number = bootstrapWorkspaceFontSize()
+  private fontOverrides: readonly FontOverride[] = []
   private revision = 0
   private snapshot: ThemeSnapshot
   private readonly media: MediaQueryList | undefined
@@ -255,13 +289,72 @@ export class ThemeRuntime {
     this.publish()
   }
 
+  /**
+   * Change the workspace document font size — the only write entry for the
+   * workspace typography axis. Accepted values are written through the settings
+   * scope and emit `theme/change`.
+   * @param px - integer px within FONT_SIZE_MIN..FONT_SIZE_MAX; out-of-range or fractional values throw.
+   */
+  setWorkspaceFontSize(px: number): void {
+    if (!Number.isInteger(px) || px < FONT_SIZE_MIN || px > FONT_SIZE_MAX) {
+      throw new Error(`workspace font size ${px} is outside ${FONT_SIZE_MIN}..${FONT_SIZE_MAX}`)
+    }
+    if (this.workspaceFontSize === px) return
+    this.workspaceFontSize = px
+    void this.host.set(WORKSPACE_FONT_SIZE_FIELD, px)
+    this.publish()
+  }
+
   /** Adopt the scope's accepted durable preference without writing it back. */
   private adopt(): void {
     const section = this.host.getSnapshot().value
     if (section === undefined) return
-    if (this.preference === section.preference && this.fontSize === section.fontSize) return
+    const overrides = section.fonts ?? []
+    if (this.preference === section.preference && this.fontSize === section.fontSize
+      && this.workspaceFontSize === section.workspaceFontSize
+      && sameOverrides(this.fontOverrides, overrides)) return
     this.preference = section.preference
     this.fontSize = section.fontSize
+    this.workspaceFontSize = section.workspaceFontSize
+    this.fontOverrides = overrides
+    this.publish()
+  }
+
+  /**
+   * Pin one catalog token's size and/or family. The live value publishes before
+   * the durable write starts, matching the two axis setters.
+   * @param token - catalog token to pin.
+   * @param patch - fields to pin; omitted fields keep the shipped default.
+   * @throws when the token is not in the font catalog.
+   */
+  setFontOverride(token: string, patch: { size?: number; family?: FontFamilyId }): void {
+    if (!FONT_ITEM_BY_TOKEN.has(token)) throw new Error(`font token "${token}" is not in the settings catalog`)
+    const size = patch.size === undefined ? undefined : clampFontItemSize(token, patch.size)
+    const next = upsertOverride(this.fontOverrides, { token, ...(size === undefined ? {} : { size }),
+      ...(patch.family === undefined ? {} : { family: patch.family }) })
+    this.fontOverrides = next
+    void this.host.set(FONT_OVERRIDES_FIELD, next)
+    this.publish()
+  }
+
+  /**
+   * Drop one token's pinned choice, restoring its shipped size and family.
+   * @param token - catalog token to release.
+   */
+  clearFontOverride(token: string): void {
+    if (!this.fontOverrides.some(override => override.token === token)) return
+    const next = this.fontOverrides.filter(override => override.token !== token)
+    this.fontOverrides = next
+    if (next.length === 0) void this.host.unset(FONT_OVERRIDES_FIELD)
+    else void this.host.set(FONT_OVERRIDES_FIELD, next)
+    this.publish()
+  }
+
+  /** Release every pinned typography token, restoring the shipped composition. */
+  resetFontOverrides(): void {
+    if (this.fontOverrides.length === 0) return
+    this.fontOverrides = []
+    void this.host.unset(FONT_OVERRIDES_FIELD)
     this.publish()
   }
 
@@ -329,6 +422,9 @@ export class ThemeRuntime {
     return Object.freeze({
       preference: this.preference,
       fontSize: this.fontSize,
+      workspaceFontSize: this.workspaceFontSize,
+      fontOverrides: this.fontOverrides,
+      fontTokens: fontOverrideLayer(this.fontOverrides),
       active: this.composeActive(active),
       themes: Object.freeze([...this.themes]),
       revision: this.revision,
@@ -374,6 +470,21 @@ function bootstrapFontSize(): number {
   return Number.isInteger(parsed) && parsed >= FONT_SIZE_MIN && parsed <= FONT_SIZE_MAX
     ? parsed
     : DEFAULT_FONT_SIZE
+}
+
+/**
+ * Read the workspace font size the Host boot script wrote on `body`, with the
+ * same first-paint contract as {@link bootstrapFontSize}.
+ * @returns the boot value when it is an accepted size, else the schema default.
+ */
+function bootstrapWorkspaceFontSize(): number {
+  /* v8 ignore next -- needs a documentless run (node e2e booting the client tree), not constructible under jsdom */
+  if (typeof document === 'undefined') return DEFAULT_WORKSPACE_FONT_SIZE
+  const raw = document.body.style.getPropertyValue('--dsh-workspace-font-size')
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isInteger(parsed) && parsed >= FONT_SIZE_MIN && parsed <= FONT_SIZE_MAX
+    ? parsed
+    : DEFAULT_WORKSPACE_FONT_SIZE
 }
 
 /**
@@ -436,11 +547,11 @@ export function apply(ctx: ClientContext): void {
 
   const store = createAppearanceRowStore()
   let bound: BoundActions<typeof store> | undefined
-  const fontSizeStore = createFontSizeRowStore()
+  const fontSizeStore = createTypographyStore()
   let fontSizeBound: BoundActions<typeof fontSizeStore> | undefined
   const sync = (snapshot: ThemeSnapshot): void => {
     bound?.sync(snapshot.preference, snapshot.revision)
-    fontSizeBound?.sync(snapshot.fontSize, snapshot.revision)
+    fontSizeBound?.sync(snapshot.fontSize, snapshot.workspaceFontSize, snapshot.fontOverrides, snapshot.revision)
   }
   ctx.on('theme/change', sync)
   const injected = (actions: BoundActions<typeof store>): AppearanceRowInjected => {
@@ -461,19 +572,50 @@ export function apply(ctx: ClientContext): void {
     inject: injected,
   }, AppearanceRow))
 
-  const fontSizeInjected = (actions: BoundActions<typeof fontSizeStore>): FontSizeRowInjected => {
+  const fontSizeInjected = (axis: FontSizeAxis) => (actions: BoundActions<typeof fontSizeStore>): FontSizeRowInjected => {
+    fontSizeBound = actions
+    sync(theme.getTheme())
+    return {
+      kind: axis,
+      setFontSize: (px) => {
+        if (axis === 'workspace') theme.setWorkspaceFontSize(px)
+        else theme.setFontSize(px)
+      },
+    }
+  }
+  for (const row of [
+    { id: 'font-size', order: 11, axis: 'content' as const },
+    { id: 'workspace-font-size', order: 12, axis: 'workspace' as const },
+  ]) {
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item',
+      id: row.id,
+      order: row.order,
+      store: fontSizeStore,
+      locale: SETTINGS_NS,
+      inject: fontSizeInjected(row.axis),
+    }, FontSizeRow))
+  }
+
+  // The font table's own writes: the two axis setters plus the pinned-token
+  // writes, all of which publish live before the durable write starts.
+  const fontTableInjected = (actions: BoundActions<typeof fontSizeStore>): FontsDialogActions => {
     fontSizeBound = actions
     sync(theme.getTheme())
     return {
       setFontSize: (px) => { theme.setFontSize(px) },
+      setWorkspaceFontSize: (px) => { theme.setWorkspaceFontSize(px) },
+      setFontOverride: (token, patch) => { theme.setFontOverride(token, patch) },
+      clearFontOverride: (token) => { theme.clearFontOverride(token) },
+      resetFontOverrides: () => { theme.resetFontOverrides() },
     }
   }
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
-    id: 'font-size',
-    order: 11,
+    id: 'font-table',
+    order: 13,
     store: fontSizeStore,
     locale: SETTINGS_NS,
-    inject: fontSizeInjected,
-  }, FontSizeRow))
+    inject: fontTableInjected,
+  }, FontsRow))
 }

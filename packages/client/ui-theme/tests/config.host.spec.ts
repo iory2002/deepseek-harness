@@ -27,14 +27,28 @@ describe('ui-theme host', () => {
     const ctx = new Context()
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: DEFAULT_PREFERENCE, fontSize: 14 })
-    await configuration.update({ preference: 'dark', fontSize: 10 })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 10 })
-    await configuration.update({ fontSize: 22 })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ preference: 'dark', fontSize: 22 })
+    expect(plainConfig(configuration.fiber.config)).toEqual({
+      preference: DEFAULT_PREFERENCE, fontSize: 14, workspaceFontSize: 14, fonts: [],
+    })
+    await configuration.update({ preference: 'dark', fontSize: 10, workspaceFontSize: 12 })
+    expect(plainConfig(configuration.fiber.config)).toEqual({
+      preference: 'dark', fontSize: 10, workspaceFontSize: 12, fonts: [],
+    })
+    await configuration.update({ fontSize: 22, fonts: [{ token: '--dsw-font-xs-13', size: 15, family: 'serif' }] })
+    expect(plainConfig(configuration.fiber.config)).toEqual({
+      preference: 'dark', fontSize: 22, workspaceFontSize: 12,
+      fonts: [{ token: '--dsw-font-xs-13', size: 15, family: 'serif' }],
+    })
     await expect(configuration.update({ preference: 'sepia' })).rejects.toThrow()
     await expect(configuration.update({ fontSize: 9 })).rejects.toThrow()
     await expect(configuration.update({ fontSize: 23 })).rejects.toThrow()
+    await expect(configuration.update({ workspaceFontSize: 9 })).rejects.toThrow()
+    await expect(configuration.update({ workspaceFontSize: 23 })).rejects.toThrow()
+    // Catalog bounds and values are enforced at the wire: no unknown token, no
+    // unknown stack, no size outside the row's own range.
+    await expect(configuration.update({ fonts: [{ token: '--dsw-font-nope', size: 15 }] })).rejects.toThrow()
+    await expect(configuration.update({ fonts: [{ token: '--dsw-font-xs-13', family: 'comic' }] })).rejects.toThrow()
+    await expect(configuration.update({ fonts: [{ token: '--dsw-font-xs-13', size: 40 }] })).rejects.toThrow()
     await fiber.dispose()
   })
 
@@ -52,11 +66,16 @@ describe('ui-theme host', () => {
     expect(rows[2]).toMatchObject({ kind: 'script', placement: 'head', text: 'window.afterTheme=true' })
     expect(rowText(rows[0])).toContain('@media(prefers-color-scheme:dark)')
     expect(rowText(rows[1])).toContain('const preference = "system"')
-    expect(rowText(rows[1])).toContain('"14px"')
-    await configuration.update({ preference: 'dark', fontSize: 22 })
+    expect(rowText(rows[1])).toContain('\'--dsh-content-font-size\', "14px"')
+    expect(rowText(rows[1])).toContain('\'--dsh-workspace-font-size\', "14px"')
+    await configuration.update({ preference: 'dark', fontSize: 22, workspaceFontSize: 16,
+      fonts: [{ token: '--dsw-font-family', family: 'serif' }] })
     expect(rowText(collect(ctx)[0])).toContain('color-scheme:dark')
     expect(rowText(collect(ctx)[1])).toContain('const preference = "dark"')
     expect(rowText(collect(ctx)[1])).toContain('"22px"')
+    expect(rowText(collect(ctx)[1])).toContain('\'--dsh-workspace-font-size\', "16px"')
+    // Pinned tokens ship in the boot script too, so the first paint matches.
+    expect(rowText(collect(ctx)[1])).toContain('"--dsw-font-family"')
     await fiber.dispose()
     expect(collect(ctx)).toEqual([{ kind: 'script', placement: 'head', text: 'window.afterTheme=true' }])
   })
