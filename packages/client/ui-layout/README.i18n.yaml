@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-layout/README.md
 /:
-  en: 8e8b3572477da3c4
-  zh: eb0992921ed2f667
+  en: d96ec500357f8268
+  zh: 57610f377112cbde
 /deepseek-ai-dsh-client-ui-layout:
   en: a2f7bed6f7fd12d9
   zh: 9d7981efe76c734d
 /deepseek-ai-dsh-client-ui-layout/summary:
-  en: e45458aa2d302ecd
-  zh: 3fb0eb7090807725
+  en: 585dfc03d91b1306
+  zh: 6488ac1d57c79e02
 /deepseek-ai-dsh-client-ui-layout/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-layout/use-this-package:
-  en: 14d3b722bb34e089
-  zh: da2d8731a857e9d7
+  en: 7f85f4e171931d0b
+  zh: 3aa08f8d325191d0
 /deepseek-ai-dsh-client-ui-layout/use-this-package/frame-arrangement:
-  en: 5812cb0c51a3387b
-  zh: 9afc835c9c066000
+  en: 7c5d4912ebad76b4
+  zh: a6961d443e2046b5
 /deepseek-ai-dsh-client-ui-layout/use-this-package/window-chrome-seat:
   en: 7eac53b38d0777fe
   zh: 7f9422dff671ba50
@@ -27,11 +27,11 @@
   en: 1e1d3361dac7d8b0
   zh: b6b3d210d65738f0
 /deepseek-ai-dsh-client-ui-layout/understand-the-implementation:
-  en: 09692cc32476a91f
-  zh: 0f38c8c0834ddd20
+  en: 8625ae8d9599cf9c
+  zh: 43f96b617f244ca0
 /deepseek-ai-dsh-client-ui-layout/further-exploration:
-  en: b6c728b6ed70f2a7
-  zh: 8ee2003b98695323
+  en: 74de780b4592e28e
+  zh: a413f06f8ec406d0
 /deepseek-ai-dsh-client-ui-layout/model-experience:
   en: 9a94a7197da60052
   zh: 369a59ab63d050f1
@@ -39,8 +39,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-ui-layout/known-limitations-and-deferred-work:
-  en: 28ef894a89464cd3
-  zh: 6f55132cae2cdc1b
+  en: da92b97ac60d989f
+  zh: 5816b861728f1a04
 /deepseek-ai-dsh-client-ui-layout/known-limitations-and-deferred-work/dev-note:
-  en: 4671d1561021e834
-  zh: cf6dba523a442cb5
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-theme` lets Web GUI users choose `light`, `dark`, or `system` and set conversation content text from 10 to 22 px in Settings. A loopback client stores both values in the `ui-theme` settings namespace, which the local provider persists in `$DSH_HOME/cordis.patch.yml` by default. The plugin resolves `system` through `prefers-color-scheme` and publishes immutable `ThemeSnapshot`s; ui-layout applies each snapshot to the document. The package also ships the `--dsw-*` token stylesheets and injects a synchronous bootstrap so the selected palette and font size apply before the shell loads. Third-party themes can register alias-token overrides through `ctx.theme`.
+`dsh-client-ui-theme` lets Web GUI users choose `light`, `dark`, or `system`, set conversation content text and workspace document text from 10 to 22 px in Settings, and pin the family or size of any font token the interface actually consumes. A loopback client stores those values in the `ui-theme` settings namespace, which the local provider persists in `$DSH_HOME/cordis.patch.yml` by default. The plugin resolves `system` through `prefers-color-scheme` and publishes immutable `ThemeSnapshot`s; ui-layout applies each snapshot to the document. The package also ships the `--dsw-*` token stylesheets and injects a synchronous bootstrap so the selected palette, font sizes, and pinned tokens apply before the shell loads. Third-party themes can register alias-token overrides through `ctx.theme`.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Users switch the color scheme, the two font-size steppers, and the font table from four rows in Settings (General section); every choice persists across restarts on a loopback browser. Feature plugins consume the current snapshot through `ctx.theme` and read the `--dsw-*` tokens in CSS; they do not manage theme state themselves.
+Users switch the color scheme, the two font-size axes, and the pinned font tokens from four rows in Settings (General section); every choice persists across restarts on a loopback browser. Feature plugins consume the current snapshot through `ctx.theme` and read the `--dsw-*` tokens in CSS; they do not manage theme state themselves.
 
 ### Appearance and font sizes
 
@@ -33,9 +33,9 @@ The plugin registers Appearance preference cubes and two font-size steppers in t
 
 ### The font settings table
 
-A third row opens the font table: one row per entry of the [font catalog](src/font-catalog.ts) — the two size axes, the three font stacks (`--dsw-font-family`, `--ds-font-family-code`, `--dsw-font-family-brand`), the Markdown ladder, and the interface text scale actually consumed by feature components. Every entry names the token, the elements it draws, and a self-demonstrating sample; the catalog is closed on purpose, so the table never offers a token that would change nothing (`--dsw-font-l-20`, `-m-18`, and `-base-16` are shipped but unreferenced, so they stay out).
+A third row opens the font table: one row per entry of the [font catalog](src/font-catalog.ts) — the two size axes, the three font stacks (`--dsw-font-family`, `--ds-font-family-code`, `--dsw-font-family-brand`), the Markdown ladder, and the interface text scale feature components actually consume. Every entry names the token, the elements it draws, and a self-demonstrating sample; the catalog is closed on purpose, so the table never offers a token that changes nothing (`--dsw-font-l-20`, `-m-18`, and `-base-16` ship unreferenced and stay out).
 
-Edits pin a token in the `ui-theme` namespace's optional `fonts` field (`{ token, size?, family? }` per entry) and are applied as inline custom properties on body by the same presenter that publishes the axes, so a pinned token beats the stylesheet ladder. A pinned size is absolute: that entry stops following its axis until the row is released. `Restore default` on a row removes its entry (or returns an axis to 14 px), and the footer's confirmed `Restore all defaults` clears the whole field and both axes — the recovery path for a font that renders badly. Family edits choose from four curated stacks rather than accepting free text.
+Edits pin a token in the namespace's optional `fonts` field (`{ token, size?, family? }` per entry), which the document presenter applies as inline custom properties on body, so a pin outranks the stylesheet ladder. A pinned size is absolute: that entry stops following its axis until released. `Restore default` on a row drops its entry (or returns an axis to 14 px), and the footer's confirmed `Restore all defaults` clears the field and both axes — the recovery path for a font that renders badly. Family edits choose from four curated stacks rather than accepting free text.
 
 ### Registering a theme
 
@@ -43,7 +43,7 @@ A composition can register a third-party theme id with alias-token overrides thr
 
 ### Pre-plugin palette
 
-When the host composition includes an HTTP server, the host half embeds the registered `ui-theme` settings, or schema defaults, into each index response. Head CSS selects the document canvas color scheme before any script runs, including a `prefers-color-scheme` query for the `system` preference. A body script then sets `body[data-ds-dark-theme]`, `--dsh-content-font-size`, and `--dsh-workspace-font-size` before the loading page and application scripts, so the first paint uses the selected palette and both text sizes.
+When the host composition includes an HTTP server, the host half embeds the registered `ui-theme` settings, or schema defaults, into each index response. Head CSS selects the document canvas color scheme before any script runs, including a `prefers-color-scheme` query for the `system` preference. A body script then sets `body[data-ds-dark-theme]`, both font-size axes, and the pinned font tokens before the loading page and application scripts, so the first paint uses the selected palette, sizes, and fonts.
 
 -----
 
@@ -81,7 +81,7 @@ The `--dsw-alias-turn-trigger-*` tokens provide separate resting and hover backg
 
 `corner-shape.css` smooths every rounded corner: inside `@supports (corner-shape: superellipse(1.5))` it defines `--dsw-corner-shape` and applies it to all elements and their `::before`/`::after` through the universal selector, so engines without `corner-shape` keep circular corners. Full-round shapes — `border-radius: 50%` circles and pill radii — pair `corner-shape: round` with their radius in the owning component sheet because a superellipse deforms them; the corner-shape stylesheet spec enforces that pairing across every package stylesheet.
 
-`gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. The workspace axis repeats that shape from `--dsh-workspace-font-size` (`--dsh-workspace-font-size-secondary` and both deltas). Custom-property substitution happens where a property is declared, so the ladder is hosted on both `body` and the document preview root (`[data-document-preview]`), which re-binds the content size to the workspace axis: every token the preview computes — Markdown headings, base text, tables, and the restated code family — follows the workspace size, while tokens declared only on `body` keep theirs. Dense small variants stay fixed. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`), the translucent-menu `--dsw-menu-backdrop-filter`, and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect. An elevated surface that paints `--dsw-specific-menu` also applies `backdrop-filter: var(--dsw-menu-backdrop-filter)` ([decision](../../../.agents/notes/implemented/feature/2026-09-17-compact-translucent-menu-surfaces.md)). Dark menus use a 45%-opaque gray fill and the `border-l3` stroke; light menus retain their `border-l1` stroke.
+`gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. The sheet hosts that ladder on `body` and on `[data-document-preview]`, because a custom property substitutes where it is declared, and the document preview root rebinds the content axis to the workspace axis and restates the code family for its own subtree. Dense small and code variants stay fixed outside that subtree. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`), the translucent-menu `--dsw-menu-backdrop-filter`, and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect. An elevated surface that paints `--dsw-specific-menu` also applies `backdrop-filter: var(--dsw-menu-backdrop-filter)` ([styling reference](../../../docs/web-styling.md#component-rules)). Dark menus use a 45%-opaque gray fill and the `border-l3` stroke; light menus retain their `border-l1` stroke.
 
 `brand-font.css` references the bundled `montserrat-regular.woff2` / `montserrat-light.woff2` / `montserrat-medium.woff2`, Montserrat Regular, Light, and Medium under the SIL Open Font License shipped with the stylesheet and WOFF2 under `lib/styles/`. `--dsw-font-family-brand` selects this face for brand text; ordinary UI keeps the system font stack. The source is Google Fonts' Montserrat distribution. The Web entry imports the package's `./brand-font.css` export so Vite emits and resolves the font asset; the Web build also includes its license. The Web application, including Desktop onboarding, loads the font offline. The native credential welcome retains its system font.
 
@@ -93,7 +93,7 @@ The `--dsw-alias-turn-trigger-*` tokens provide separate resting and hover backg
 
 ### Preference persistence
 
-The service provides itself immediately with the schema defaults on a loopback browser, then loads the `ui-theme` namespace and writes each accepted theme or font-size change through the Host settings API. Pushed settings changes and reconnects refetch the namespace. Non-loopback pages do not create that Host-backed scope. The persistence boundary is owned by the [Host-backed preferences note](../../../.agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.md).
+The service provides itself immediately with the schema defaults on a loopback browser, then loads the `ui-theme` namespace and writes each accepted theme or font-size change through the Host settings API. Pushed settings changes and reconnects refetch the namespace. Non-loopback pages do not create that Host-backed scope. The persistence boundary is owned by the [Host-backed preferences reference](../ui-settings/README.md).
 
 </details>
 
@@ -108,7 +108,7 @@ These pages cover the layout presenter, the token consumers, and the styling rul
 - [ui-sidebar](../ui-sidebar/README.md) — a consumer of the scrollbar rebinding contract.
 - [ui-conversation](../ui-conversation/README.md) — a consumer of `--dsh-scrollbar-width` for the composer seat.
 - [Web styling](../../../docs/web-styling.md) — the authoritative styling rules for web client components.
-- [Host-backed preferences](../../../.agents/notes/implemented/bug-fix/2026-08-06-host-backed-web-preferences.md) — the persistence boundary decision.
+- [historical Host-backed preferences](../../../.agents/notes/archived/bug-fix/2026-08-06-host-backed-web-preferences.md) — the persistence boundary decision.
 
 -----
 
@@ -140,5 +140,3 @@ These limits define the theme extension surface and the color authority; they ar
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. The settings scope validates and publishes the durable theme section, while the registry emits `theme/change` synchronously with its own mutations. Store/registry agreement is covered directly by this package's Host, scope, and service behavior specs.

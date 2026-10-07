@@ -211,8 +211,8 @@ function TabSlot({
   }), [tab.id, seat, fullscreen, active, signal, tabActions, useStore, useTabNavigation, shortcuts])
   const content = renderSlot(seat, {}, { entryKey: definition?.id ?? tab.kind, fallback, hookContext })
   return seat === 'sidebar.right.pane.tab.title'
-    ? <span className={css.tabTitle} data-sidebar-right-tab={tab.id} data-sidebar-right-occurrence={id}>{content}</span>
-    : <div className={css.tabBody} data-sidebar-right-tab={tab.id} data-sidebar-right-occurrence={id}>{content}</div>
+    ? <span key={id} className={css.tabTitle} data-sidebar-right-tab={tab.id} data-sidebar-right-occurrence={id}>{content}</span>
+    : <div key={id} className={css.tabBody} data-sidebar-right-tab={tab.id} data-sidebar-right-occurrence={id}>{content}</div>
 }
 
 /**
@@ -320,9 +320,9 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
       data-sidebar-right-open={open || undefined}
       // Off-edge is out of reach: the stylesheet's visibility flip takes the
       // hidden panel out of the tab order, and this takes it out of the
-      // accessibility tree. A plain column is never off-edge.
-      aria-hidden={!open || undefined}
-    >
+      // accessibility tree. A plain column is never off-edge, and docked hosts
+      // hide individually, so floating descendants stay accessible.
+      aria-hidden={(!open && surface.layout.floats.length === 0) || undefined}    >
       <div className={css.panelBody}>
         <DockLayout
           state={surface.layout}

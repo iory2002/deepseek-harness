@@ -9,41 +9,41 @@
   en: 06c7d7624947a72a
   zh: ac4ca82984564825
 /deepseek-ai-dsh-client-ui-theme/summary:
-  en: c98899d108fd8318
-  zh: c6799618ac302bfc
+  en: b9d80714e7d8bedd
+  zh: d4919523521b6d88
 /deepseek-ai-dsh-client-ui-theme/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-theme/use-this-package:
-  en: c4e7c9eca5cbfa92
-  zh: b5feb7681b9d4bd0
+  en: bae63fc880855ada
+  zh: c175d46fba093535
 /deepseek-ai-dsh-client-ui-theme/use-this-package/appearance-and-font-sizes:
   en: da836a5e3d5fa9d3
   zh: 69f2af4c19357a8b
 /deepseek-ai-dsh-client-ui-theme/use-this-package/the-font-settings-table:
-  en: 0aa5757474d91bb7
-  zh: 01ce52c0f612a5b9
+  en: e7d1264b5aae735e
+  zh: 8c1bec3ee59d738c
 /deepseek-ai-dsh-client-ui-theme/use-this-package/registering-a-theme:
   en: 2cd32ccaba33b3e9
   zh: 53ea78d19929ea02
 /deepseek-ai-dsh-client-ui-theme/use-this-package/pre-plugin-palette:
-  en: 997c05581b1b5da3
-  zh: 82ef8255e6ee8d87
+  en: 2051417520819e8c
+  zh: 68b0c2d5614ce122
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation:
   en: 687ff0a8bccc9c0c
   zh: 463d6b7afd4bd4a4
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation/stylesheets:
-  en: 498bccfcc9bdf3b5
-  zh: 13c14a3dc2ccffe7
+  en: ff053d244492a840
+  zh: f57cbc0480681f48
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation/scrollbar-rebinding:
   en: bf76e7c34a331595
   zh: 5accd0260ef7c61e
 /deepseek-ai-dsh-client-ui-theme/understand-the-implementation/preference-persistence:
-  en: 2d3e5c0ef3f40ffa
-  zh: d1bc9a86f68ec84b
+  en: 818da56a938d5394
+  zh: e6fd46a9e964b0a4
 /deepseek-ai-dsh-client-ui-theme/further-exploration:
-  en: fb1b98ad71d7d9c2
-  zh: c7fa18ab56739e0c
+  en: 10664fe91f2ca00b
+  zh: 086f8dffdc223c22
 /deepseek-ai-dsh-client-ui-theme/model-experience:
   en: 3120df665299c634
   zh: 1d9f365d091d0d2a
@@ -54,5 +54,5 @@
   en: 0d328dbced31a041
   zh: 2951de356ba6bb82
 /deepseek-ai-dsh-client-ui-theme/known-limitations-and-deferred-work/dev-note:
-  en: f1a2942985b11203
-  zh: 8196d82321e024b0
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

@@ -1,5 +1,5 @@
 ---
-description: "Web GUI 的外壳布局：三栏 AppFrame（中栏与右栏的座位由持久排列决定）、面板几何服务与主题呈现；供窗口外壳的使用者与维护者阅读。"
+description: "Web GUI 的外壳布局：三栏 AppFrame（右栏作为贴边面板的轨道）、面板几何服务与主题呈现；供窗口外壳的使用者与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包提供 Web GUI 的三栏 AppFrame、左右栏宽度与 `ctx.layout` 呈现控制。持久排列决定弹性中栏承载哪个界面：出厂默认的 `conversation-center` 让会话界面居中、工作区界面贴靠右侧，`workspace-center` 则让工作区界面居中、把右栏留给会话界面。贴边右栏先让步以保护中栏空间，普通右栏则恒定保留。主题呈现器负责配色、别名 token、正文字号与 document 元数据；布局状态在刷新后重置，排列本身是持久设置。
+本包提供 Web GUI 的三栏 AppFrame、左右栏宽度与 `ctx.layout` 呈现控制。持久设置 `arrangement` 决定弹性中栏承载哪个界面：出厂默认的 `conversation-center` 让会话界面居中、工作区界面贴靠右边缘；`workspace-center` 则让工作区界面居中、把右栏留给会话界面。贴边右栏先让步以保护中栏空间，全屏由占用方呈现，框架保留宽屏底层轨道。主题呈现器负责配色、别名 token、会话正文字号、工作区字号与 document 元数据；布局状态在刷新后重置，排列本身是持久设置。
 
 ## 目录
 
@@ -29,19 +29,21 @@ kind: "package-reference"
 
 本插件在 root slot 中组合侧边栏、主内容和右栏。侧边栏宽度为 264～420px，默认为 280px，收起后保留 56px 控制栏；窗口宽度低于 1024px 时自动收起，打开右侧面板也会收起手动展开的侧边栏。右侧面板首次打开时使用视口宽度的 45%，之后保留用户的像素宽度偏好，上限为 70%。为给中栏保留 400px，框架先将右侧面板缩减至 300px，再报告空间不足，使占用方将其关闭，最后才进一步压缩中栏。拖动没有过渡延迟；右侧手柄在关闭或全屏时不显示。
 
-全局面板占据 root 作用域的 `main` keyed slot；`conversation` 是为会话界面保留的 key。`ctx.layout.selectPanel(id)` 选中已注册面板，`null` 则选中会话界面，但不改变当前会话。默认组合不注册任何全局面板。
+全局面板占据 root 作用域的 `main` keyed slot；`conversation` 是为会话界面保留的 key。`ctx.layout.selectPanel(id)` 选中已注册面板，`null` 则选中会话界面，但不改变当前会话。Plugins 页面是默认组合中的一个全局面板。
+
+root 作用域的单一 `shell.bottom` slot 横跨三列下方的整行。占用方控制自身高度与显隐；三列按该高度缩短，空内容不预留空间。切换主面板时保留底部组件。列宽拖拽手柄止于底部内容上方，`shell.overlay` 仍覆盖整个框架。默认组合不占用此 slot。
 
 <a id="frame-arrangement"></a>
 ### 框架排列
 
-`arrangement` 是本包的持久设置，可在「设置 → 通用」的「界面布局」中选择，也可以由任意 profile patch 在本插件的条目上设置；出厂默认值为 `conversation-center`。两种排列把同样的两个座位摆到互换的位置，因此切换排列不会重新注册或重建任何界面：
+`arrangement` 是本包的持久设置，可在「设置 → 通用」的「界面布局」中选择，也可以由任意 profile patch 在本插件的条目上设置；出厂默认值为 `conversation-center`。两种排列把同样的两个已声明座位摆到互换的位置，因此切换排列不会重新注册或重建任何界面：
 
 | 排列 | 弹性中栏 | 右栏 |
 |---|---|---|
 | `conversation-center` | `main`（选中的全局面板，否则 `conversation`） | `rightbar`，owner `role: 'edge'` |
 | `workspace-center` | `rightbar`，owner `role: 'plain'`（选中的全局面板占据中栏） | `main` 的 `conversation` key |
 
-在 `plain` 角色下，右栏是恒定保留的普通列：框架始终按宽度偏好给它定尺寸，中栏吸收剩余空间直至为零，缩放手柄始终可用，也不再期待轨道或全屏上报——贴边界面的收起与全屏呈现在这里并不存在。其占用方以普通流渲染，因此 ui-sidebar-right 会跳过滑出、隐藏、面板控件与呈现上报，其收起／全屏命令会报告 `command.plainColumn`。切换排列会保留已记录的面板宽度，并让到达的界面通过自己的座位打开。
+在 `plain` 角色下，右栏是恒定保留的普通列：框架始终按宽度偏好给它定尺寸，中栏吸收剩余空间直至为零，缩放手柄始终可用。其占用方以普通流渲染，因此 ui-sidebar-right 会跳过滑出、隐藏、面板控件与呈现上报，其收起与全屏命令报告 `command.plainColumn`。切换排列会保留已记录的面板宽度、打开贴边角色此前收起的界面，并让到达的界面通过自己的座位打开。排列是 profile 级选择，同一 profile 的窗口保持一致。
 
 <a id="window-chrome-seat"></a>
 ### 窗口 chrome 座
@@ -66,7 +68,7 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 
 `selectPanel(id)` 在改变选中态前检查实时 `main` 注册表；缺失的 key 会抛错并保留当前面板。`beginNavigation()` 为异步 UI 导航返回 abort signal。后续调用、有效面板选择（包括重复选择）或布局释放会中止该 signal，但不取消底层会话创建。消费方在提交导航或搬移草稿前检查 signal。
 
-一次注册声明五个子 slot，并绑定 `ctx.layout` 的 `selectPanel`、`toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。同一个 root 存储把 `panelInfo` 选中态与 `layoutInfo` 的测量、宽度偏好、排列、呈现报告分开。`ctx.layout.panelInfo` 与 `ctx.layout.arrangement` 都是该存储的实时视图，前者与标准 `usePanelInfo` hook 共用同一个选中态来源；AppFrame 订阅引用稳定的布局对象，并据此决定排列的渲染方案与几何角色。框架把存储中的排列绑定到本插件的 Host 设置段：采纳被接受的值，并把本地选择写回该段；在 Host 接受某个段之前，或它拒绝写入时，排列只留在进程内。`rightbar` owner 提供 `role`、实际 `width`、`viewportWidth`，以及表示能否以普通模式呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 保持各列容器挂载。右栏的 root 控制器仅在选中会话界面时，经 `SessionProvider` 渲染 `rightbar.session`；内容卸载时的报告释放轨道。独立的标题组件仅在会话界面可见时使用所选会话标题，以构建配置的产品标题或本地化 `common.brand.localBuild` 为回退值；语言变化会更新该回退值。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号与 token 变量，再把渲染出的背景测量为唯一的颜色依据。全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列布局。退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
+一次注册声明框架的子 slot，并绑定 `ctx.layout` 的 `selectPanel`、`toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。同一个 root 存储把 `panelInfo` 选中态与 `layoutInfo` 测量、宽度偏好、排列、呈现报告分开；`ctx.layout.arrangement` 是它的实时视图，框架把它绑定到本插件的 Host 设置段：采纳被接受的值，并把本地选择写回该段。`ctx.layout.panelInfo` 与标准 `usePanelInfo` hook 共用同一个选中态来源；AppFrame 订阅引用稳定的布局对象，并据此决定排列的渲染方案与几何角色。`rightbar` owner 提供 `role`、实际 `width`、`viewportWidth`，以及表示能否以普通模式呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 保持各列容器挂载。右栏的 root 控制器仅在选中会话界面时，经 `SessionProvider` 渲染 `rightbar.session`；内容卸载时的报告释放轨道。独立的标题组件仅在会话界面可见时使用所选会话标题，以构建配置的产品标题或本地化 `common.brand.localBuild` 为回退值；语言变化会更新该回退值。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号与 token 变量，再把渲染出的背景测量为唯一的颜色依据。全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列布局。退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
 
 </details>
 
@@ -81,7 +83,7 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 - [ui-conversation](../ui-conversation/README.zh.md)——占据 `main` 中的 `conversation` key。
 - [ui-sidebar-right](../ui-sidebar-right/README.zh.md)——以每会话一个停靠面占据 `rightbar` 栏。
 - [ui-theme](../ui-theme/README.zh.md)——呈现器消费其解析快照的主题 seam。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册槽位。
+- [Web 客户端架构](../../../docs/subsystems/web-client.zh.md)——浏览器插件行如何加载并注册槽位。
 
 -----
 
@@ -102,8 +104,6 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 这些限制界定了当前布局行为。它们是当前包约束，不是通用窗口管理器对比或任务积压。
 
 - **面板几何是瞬时状态**——重新加载会恢复侧栏默认值并隐藏右侧面板；拖动设置的宽度是整个框架共用的一份偏好，而非每个会话各自的属性。
-- **排列是 profile 级设置**——它不属于单个会话也不属于单个窗口：同一 profile 的所有窗口都渲染被接受的值，因此两个窗口不会显示不同排列。
-- **切换排列会保留已记录的面板状态**——切到 `workspace-center` 会打开此前收起的界面，切回则让它保持打开并沿用其宽度；除此之外两个方向都不会改写界面自身记录的呈现状态。
 - **极窄窗口**——右侧面板关闭后，中栏仍可能小于 400px；左侧 56px 控制栏仍会保留。
 - **轨道与面板仅在动画期间沿同一条曲线运动**——离散开合时框架设置 `data-animating`，其轨道过渡和占用方的滑入读取同一组时长与缓动变量；占用方若自用一套，挤压时面板边缘就会与会话界面的边缘脱开。拖拽和即时呈现切换不带过渡，因此该曲线不覆盖它们。
 - **挤压重排期间无滚动锚定**——布局变化可能移动读者的视口。
@@ -117,5 +117,3 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。外壳中 `ctx.layout` 背后的浏览状态存储不发出 Cordis 事件；clamp 与轨道的时序由本包各栏与服务规格直接断言。
