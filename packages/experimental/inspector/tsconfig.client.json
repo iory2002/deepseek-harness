@@ -94,7 +94,7 @@
   ],
   "references": [
     { "path": "../../client/ui-renderer" },
-    { "path": "../../client/ui-layout" },
+    { "path": "../../client/ui-layout/tsconfig.client.json" },
     { "path": "../../client/shortcuts/tsconfig.client.json" },
     { "path": "../../client/store" },
     { "path": "../../client/ui-slots" },
