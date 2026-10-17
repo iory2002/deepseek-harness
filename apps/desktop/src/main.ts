@@ -30,6 +30,7 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
 import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+import { CompanionSizeStore, readCompanionScale } from './companion-size.ts'
 import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
@@ -59,6 +60,8 @@ import { DesktopUpdateOverlays } from './update-overlay.ts'
 import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
+import { DesktopPetWindow } from './pet-window.ts'
+import { STARTING_WORK_STATUS, type DesktopWorkStatus } from './work-status.ts'
 
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => {}
@@ -422,6 +425,10 @@ async function main(): Promise<void> {
       throw new Error('dsh desktop: rejected IPC from an unowned renderer')
     }
   }
+  const companionSize = new CompanionSizeStore(join(app.getPath('userData'), 'companion.json'))
+  // Started here so the preference read overlaps the rest of startup instead of
+  // delaying the companion window by one file-system turn.
+  const storedCompanionScale = companionSize.read()
   let navigation: { window: BrowserWindow; url: string; promise: Promise<void> } | undefined
   const navigateMain = (url: string): Promise<void> => {
     const window = mainWindow
@@ -506,6 +513,7 @@ async function main(): Promise<void> {
       },
       updateTasks: (action: 'inspect' | 'lock' | 'unlock') => host.updateTasks(action),
       inspectQuit: () => host.inspectQuit(),
+      workStatus: () => host.workStatus(),
     }
   }, (state) => {
     if (state.phase === 'error') reportFatal(state.failure, 'host')
@@ -955,6 +963,10 @@ async function main(): Promise<void> {
     { label: currentDesktopLocale().messages.checkUpdatesMenu, click: () => { void openUpdatePrompt(true) } },
     ...process.platform === 'darwin' || process.platform === 'win32'
       ? [{ label: currentDesktopLocale().messages.cliCommandMenu, click: () => { void commandManager.show() } }] : [],
+    {
+      label: companion.visible ? currentDesktopLocale().messages.petHide : currentDesktopLocale().messages.petShow,
+      click: () => { toggleCompanion() },
+    },
     ...development ? [
       { type: 'separator' as const },
       { label: currentDesktopLocale().messages.reloadPageMenu, role: 'reload' as const },
@@ -980,13 +992,58 @@ async function main(): Promise<void> {
     }, ...platformMenus()]))
     tray?.relabel()
   }
+  const readCompanionStatus = async (): Promise<DesktopWorkStatus> => {
+    const host = backend.host
+    if (host !== undefined) return host.workStatus()
+    // A Host that failed stays unavailable; one still starting is not a failure.
+    if (backend.state.phase === 'error') throw new Error('desktop companion: Host is unavailable')
+    return STARTING_WORK_STATUS
+  }
+  const toggleCompanion = (): void => {
+    companion.toggle()
+    refreshApplicationMenu()
+  }
+  let companionScale = await storedCompanionScale
+  const companion = new DesktopPetWindow({
+    preload: fileURLToPath(new URL('./preload-pet.cjs', import.meta.url)),
+    locale: currentDesktopLocale,
+    activate: () => { focusPrimaryWindow() },
+    readStatus: readCompanionStatus,
+    positionFile: join(app.getPath('userData'), 'companion-position.json'),
+    scale: companionScale,
+    hide: () => { toggleCompanion() },
+    quit: () => { app.quit() },
+  })
+  ipcMain.handle(DESKTOP_IPC.companionSize, (event) => {
+    assertProductSender(event)
+    return companionScale
+  })
+  ipcMain.handle(DESKTOP_IPC.companionSetSize, (event, scale: unknown) => {
+    assertProductSender(event)
+    const next = readCompanionScale(scale)
+    if (next === undefined) throw new Error('dsh desktop: rejected an unknown companion size')
+    companionScale = next
+    companion.setScale(next)
+    // The window has already moved; a preference that cannot be stored costs the next launch only.
+    return companionSize.write(next).then(
+      () => next,
+      (error: unknown) => {
+        console.error('desktop companion: could not store its size', error)
+        return next
+      },
+    )
+  })
+  // The application menu owns the companion entry; the tray labels itself on construction.
   refreshApplicationMenu()
   const trayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(process.resourcesPath, 'tray.ico')
   if (process.platform === 'win32') {
     // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,
-        open: () => { focusPrimaryWindow() }, quit: () => { app.quit() } })
+        open: () => { focusPrimaryWindow() },
+        toggleCompanion,
+        companionVisible: () => companion.visible,
+        quit: () => { app.quit() } })
     } catch (error) { console.warn('desktop tray: unavailable', error) }
   }
   const backgroundNotice = process.platform === 'win32'
@@ -1118,6 +1175,8 @@ async function main(): Promise<void> {
     if (activate) window.show()
     else window.showInactive()
     enteredWorkspace = true
+    // The companion belongs to the working application: it appears with the workspace.
+    void companion.show()
     if (welcomeWindow !== undefined) {
       welcomeWindow.close()
       window.webContents.send(DESKTOP_IPC.enterWorkspace)
@@ -1245,6 +1304,7 @@ async function main(): Promise<void> {
     quitConfirmation.dispose()
     backgroundNotice?.dispose()
     tray?.dispose()
+    companion.dispose()
     stopAccount?.()
     if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.hide()
     if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.hide()
@@ -1263,6 +1323,7 @@ async function main(): Promise<void> {
       backgroundNotice?.dispose()
       updateJournal?.action('quit-requested')
       tray?.dispose()
+      companion.dispose()
       updateDialog.dispose()
       mandatoryUI?.dispose()
       // Installation preparation already awaited Platform storage cleanup.

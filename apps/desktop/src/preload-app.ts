@@ -3,6 +3,7 @@
 import type { DesktopShortcutInput, ShortcutConfigSnapshot, ShortcutSaveResult } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { DESKTOP_IPC, SCHEME, type DshDesktopProductApi, type DesktopUpdatePresentation } from './ipc.ts'
+import type { CompanionScale } from './companion-size.ts'
 import { PLATFORM_IPC } from './platform-ipc.ts'
 import { markDocumentPlatform, syncWindowFullscreen } from './preload-platform.ts'
 import { syncNativeTheme } from './preload-theme.ts'
@@ -54,6 +55,10 @@ function createProductApi(): DshDesktopProductApi {
         ipcRenderer.on(DESKTOP_IPC.updatesPresentation, handle)
         return () => { ipcRenderer.off(DESKTOP_IPC.updatesPresentation, handle) }
       },
+    },
+    companion: {
+      size: () => ipcRenderer.invoke(DESKTOP_IPC.companionSize) as Promise<CompanionScale>,
+      setSize: scale => ipcRenderer.invoke(DESKTOP_IPC.companionSetSize, scale) as Promise<CompanionScale>,
     },
   }
 }

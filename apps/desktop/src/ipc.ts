@@ -3,6 +3,8 @@
 import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { DesktopBrowserBridge } from '@deepseek-ai/dsh-client-ui-sidebar-browser/types'
+// Type-only: the preload bundle must not reach the file store this names.
+import type { CompanionScale } from './companion-size.ts'
 
 /** IPC channel names kept private to the desktop application bundle. */
 export const DESKTOP_IPC = {
@@ -27,6 +29,8 @@ export const DESKTOP_IPC = {
   updatesStatus: 'dsh-desktop:updates-status',
   updatesOpen: 'dsh-desktop:updates-open',
   updatesPresentation: 'dsh-desktop:updates-presentation',
+  companionSize: 'dsh-desktop:companion-size',
+  companionSetSize: 'dsh-desktop:companion-set-size',
   nativeThemeSet: 'dsh-desktop:native-theme-set',
   windowFullscreen: 'dsh-desktop:window-fullscreen',
   windowsAppearance: 'dsh-desktop:windows-appearance',
@@ -83,6 +87,12 @@ export interface DshDesktopProductApi {
     status(): Promise<DesktopUpdatePresentation>
     open(): Promise<void>
     subscribe(listener: (state: DesktopUpdatePresentation) => void): () => void
+  }
+  /** Always-on-top companion size; the shell owns both the value and the window. */
+  readonly companion: {
+    size(): Promise<CompanionScale>
+    /** @param scale - One offered step. @returns the step the shell accepted. */
+    setSize(scale: CompanionScale): Promise<CompanionScale>
   }
 }
 

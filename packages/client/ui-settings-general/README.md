@@ -43,7 +43,9 @@ The current release version appears at the bottom of General Settings in Web and
 
 The Coding Tools switch controls the shared `ui-settings.enabled` preference described by [ui-settings](../ui-settings/README.md#use-this-package). It is available in both Web and desktop, follows accepted changes immediately, and disables duplicate input while a write settles. A failed write displays localized retry guidance.
 
-The General section holds the built-in Coding Tools and Current version rows alongside rows registered into `settings.general.item` by feature packages. Each registrant owns its row copy and behavior. The Appearance row, for example, lives in ui-theme.
+In the Electron desktop app, a companion window size row offers the shell's three steps — Small, Medium, and Large — and marks the active one. The row appears only when the preload exposes the companion API, so a plain browser and an older shell render no row. A refused size restores the previous step and displays localized retry guidance.
+
+The General section holds the built-in Coding Tools, Current version, and Desktop companion size rows alongside rows registered into `settings.general.item` by feature packages. Each registrant owns its row copy and behavior. The Appearance row, for example, lives in ui-theme.
 
 ### Opening the configuration file
 
@@ -114,7 +116,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define what the shell itself provides versus what features must supply; they are current package constraints.
 
-- **Additional General rows require their feature plugins** — the shell supplies Coding Tools and Current version; feature plugins supply the remaining preferences.
+- **Additional General rows require their feature plugins** — the shell supplies Coding Tools, Current version, and the Desktop companion size; feature plugins supply the remaining preferences.
 - **The Windows caption badge keeps a side-opening bubble** — `DesktopUpdateBadge` occupies `sidebar.toggle.badge` in the caption and requests `side="right"`, so the Desktop-owned menu text can cover its bubble while the sidebar is collapsed on Windows; the sidebar toggle and New Session bubbles open below the caption instead (#4688).
 
 <a id="dev-note"></a>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'">
+    <title>DeepSeek Harness</title>
+    <link rel="stylesheet" href="pet.css">
+  </head>
+  <body>
+    <div id="pet" data-phase="starting" data-pose="stand" data-symbol="none" data-prop="none" data-card="false">
+      <div id="chip"><span id="dot"></span><span id="phase"></span></div>
+      <div id="body">
+        <div id="stage">
+          <img id="pose-stand" data-pose="stand" src="pet/whale-girl.png" alt="" draggable="false">
+          <img id="pose-work" data-pose="work" src="pet/work.png" alt="" draggable="false">
+          <img id="pose-idle" data-pose="idle" src="pet/idle.png" alt="" draggable="false">
+          <img id="pose-happy" data-pose="happy" src="pet/happy.png" alt="" draggable="false">
+        </div>
+      </div>
+      <div id="symbol">
+        <span id="symbol-question">?</span>
+        <span id="symbol-note">♪</span>
+        <span id="symbol-zzz">z z z</span>
+        <span id="symbol-sweat"><i></i><i></i><i></i></span>
+        <span id="symbol-mark"></span>
+      </div>
+      <div id="prop">
+        <span id="prop-cup"></span>
+        <span id="prop-clock"></span>
+        <span id="prop-lamp"></span>
+      </div>
+      <div id="details" hidden>
+        <ul id="counts"></ul>
+        <p id="hint"></p>
+      </div>
+    </div>
+    <script src="pet.js" type="module"></script>
+  </body>
+</html>

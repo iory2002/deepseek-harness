@@ -12,6 +12,7 @@ import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-
 import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
+import { PET_IPC } from '../src/pet-api.ts'
 
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
@@ -65,7 +66,8 @@ const harness = await vi.hoisted(async () => {
   const updateDownload = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
   const updateInstall = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
   const popup = vi.fn<(options: { window: FakeWindow; x?: number; y?: number; callback?: () => void }) => void>()
-  const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { popup: typeof popup }>(() => ({ popup }))
+  const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { template: MenuItemConstructorOptions[]; popup: typeof popup }>(
+    template => ({ template, popup }))
   const menu = Object.assign(menuBuilder, { buildFromTemplate: menuBuilder, setApplicationMenu: vi.fn() })
   class FakeWindow extends EventEmitter {
     destroyed = false
@@ -89,18 +91,22 @@ const harness = await vi.hoisted(async () => {
     })
     readonly shown = deferred()
     readonly show = vi.fn(() => { this.shown.resolve() })
+    readonly showInactive = vi.fn(() => { this.visible = true })
     readonly hide = vi.fn()
     readonly focus = vi.fn()
     readonly moveTop = vi.fn()
     readonly setAlwaysOnTop = vi.fn()
+    readonly setVisibleOnAllWorkspaces = vi.fn()
     readonly restore = vi.fn()
     readonly setSize = vi.fn()
+    readonly setPosition = vi.fn()
+    readonly loadFile = vi.fn(async () => {})
     readonly getBounds = vi.fn(() => ({ x: 0, y: 0, width: 800, height: 700 }))
     readonly setMinimumSize = vi.fn()
     readonly setTitleBarOverlay = vi.fn()
     readonly setVibrancy = vi.fn()
     readonly setBackgroundColor = vi.fn()
-    constructor(readonly options: { show: boolean; modal?: boolean }) {
+    constructor(readonly options: { show: boolean; modal?: boolean; alwaysOnTop?: boolean }) {
       super(); if (windowFailure !== undefined) throw windowFailure; windows.push(this)
     }
     isDestroyed() { return this.destroyed }
@@ -132,6 +138,7 @@ const harness = await vi.hoisted(async () => {
   class FakeHost {
     readonly updateTasks = vi.fn(async (_action: 'inspect' | 'lock' | 'unlock') => false)
     readonly inspectQuit = vi.fn(async () => ({ activeTasks: false, scheduledTasks: false }))
+    readonly workStatus = vi.fn(async () => ({ phase: 'idle' as const, agents: 0, subagents: 0, jobs: 0, waits: 0 }))
     url = 'http://127.0.0.1:3080/?token=test'
     fetch = vi.fn(async () => Response.json({ hasApiKey: true, writable: true, localePreference: null }))
     readonly ready = deferred()
@@ -183,7 +190,7 @@ const harness = await vi.hoisted(async () => {
   const trays: FakeTray[] = []
   class FakeTray extends EventEmitter {
     readonly setToolTip = vi.fn()
-    readonly setContextMenu = vi.fn()
+    readonly setContextMenu = vi.fn<(menu: { template: MenuItemConstructorOptions[] }) => void>()
     readonly destroy = vi.fn()
     constructor(readonly image: unknown) { super(); trays.push(this) }
   }
@@ -288,6 +295,12 @@ vi.mock('electron', () => ({
       harness.handlers.set(channel, handler)
     },
     removeHandler: (channel: string) => { harness.handlers.delete(channel) },
+    removeListener: vi.fn(),
+  },
+  screen: {
+    getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1040 } }),
+    getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1040 } }),
+    getCursorScreenPoint: () => ({ x: 0, y: 0 }),
   },
   Menu: { setApplicationMenu: harness.menu.setApplicationMenu, buildFromTemplate: harness.menu },
   session: { defaultSession: {
@@ -303,6 +316,11 @@ vi.mock('../src/background-notice.ts', () => ({ DesktopBackgroundNotice: class {
   readonly close = harness.backgroundNotice.close
   readonly dispose = harness.backgroundNotice.dispose
 } }))
+
+/** The shell's own product windows; the always-on-top desktop companion is a separate window. */
+function productWindows(): InstanceType<typeof harness.FakeWindow>[] {
+  return harness.windows.filter(window => window.options.alwaysOnTop !== true)
+}
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:fs/promises')>()
   return { ...original, readFile: vi.fn((path: Parameters<typeof original.readFile>[0], encoding?: 'utf8') => {
@@ -678,7 +696,7 @@ describe('desktop main startup', () => {
   it('accepts product IPC only from the current application top frame in the owned main window', async () => {
     await readyForUpdate()
     const sender = harness.windows[0]!.webContents
-    for (const channel of [DESKTOP_IPC.updatesStatus, DESKTOP_IPC.deviceInfo]) {
+    for (const channel of [DESKTOP_IPC.updatesStatus, DESKTOP_IPC.deviceInfo, DESKTOP_IPC.companionSize]) {
       const handler = harness.handlers.get(channel)!
       expect(() => handler({ sender, senderFrame: sender.mainFrame })).not.toThrow()
       for (const event of [
@@ -845,7 +863,7 @@ describe('desktop main startup', () => {
     expect(() => handler(event, 'application', NaN, 34)).toThrow('invalid popup request')
     const application = handler(event, 'application', 48, 34)
     expect(harness.menu.buildFromTemplate.mock.lastCall![0].map(item => item.label ?? item.type)).toEqual([
-      '关于 DeepSeek Harness', 'separator', '检查更新…', '管理 dsh 命令…', 'separator', '退出',
+      '关于 DeepSeek Harness', 'separator', '检查更新…', '管理 dsh 命令…', '显示浮窗', 'separator', '退出',
     ])
     expect(harness.popup.mock.lastCall![0]).toMatchObject({ window, x: 48, y: 34 })
     expect(harness.popup.mock.lastCall![0].callback).toBeTypeOf('function')
@@ -882,8 +900,8 @@ describe('desktop main startup', () => {
       : ['Application', 'editMenu'])
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
-      ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
-      : ['about', 'separator', en.checkUpdatesMenu, 'separator', 'quit'])
+      ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, en.petShow, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
+      : ['about', 'separator', en.checkUpdatesMenu, en.petShow, 'separator', 'quit'])
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
@@ -1076,7 +1094,7 @@ describe('desktop main startup', () => {
     }
     window.destroy()
     harness.app.emit('second-instance')
-    const replacement = harness.windows[1]!
+    const replacement = harness.windows.at(-1)!
     await replacement.shown.promise
     expect(replacement.show).toHaveBeenCalledOnce()
     expect(replacement.moveTop).not.toHaveBeenCalled()
@@ -1122,6 +1140,39 @@ describe('desktop main startup', () => {
     host.exited.resolve()
     await harness.quitCompleted.promise
     expect(harness.trays[0]!.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('opens the desktop companion with the workspace and drives it from the tray', async () => {
+    const host = await readyWorkspace()
+    const companion = harness.windows.find(window => window.options.alwaysOnTop === true)
+    if (companion === undefined) throw new Error('companion window missing')
+    expect(companion.options).toMatchObject({
+      width: 220, height: 360, show: false, frame: false, transparent: true,
+      resizable: false, skipTaskbar: true, alwaysOnTop: true,
+    })
+    // The harness window reports itself visible from construction; model the companion's `show: false`.
+    companion.visible = false
+    // Opening the companion reads its stored position and size preference first,
+    // so wait for that file work instead of assuming one flush settles it.
+    for (let attempt = 0; attempt < 20 && companion.loadFile.mock.calls.length === 0; attempt++) {
+      await vi.advanceTimersByTimeAsync(10)
+    }
+    expect(companion.loadFile).toHaveBeenCalledWith(join('desktop-test-app', 'renderer', 'pet.html'))
+    expect(companion.showInactive).toHaveBeenCalledOnce()
+    expect(host.workStatus).toHaveBeenCalledOnce()
+    expect(companion.webContents.send.mock.calls.at(-1)?.[0]).toBe(PET_IPC.presentation)
+
+    const hide = applicationMenuItems().find(entry => entry.label === en.petHide)
+    expect(hide).toBeDefined()
+    ;(hide!.click as () => void)()
+    expect(companion.hide).toHaveBeenCalledOnce()
+    // The harness fake leaves its own visibility flag alone; the menu entry follows the window state.
+    companion.visible = false
+    expect(applicationMenuItems().find(entry => entry.label === en.petShow)).toBeDefined()
+    const trayMenu = harness.trays[0]!.setContextMenu.mock.calls.at(-1)![0].template as Array<{ click: () => void }>
+    trayMenu[1]!.click()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(companion.showInactive).toHaveBeenCalledTimes(2)
   })
 
   it('routes closing through the tray confirmation and keeps the Host running', async () => {
@@ -1399,7 +1450,7 @@ describe('desktop main startup', () => {
     await harness.policyBlocked.promise
     const modal = harness.windows[0]!
     expect(modal).toBeDefined()
-    expect(harness.windows).toHaveLength(1)
+    expect(productWindows()).toHaveLength(1)
     const status = harness.handlers.get(MANDATORY_IPC.status)!
     const action = harness.handlers.get(MANDATORY_IPC.action)!
     const owned = { sender: modal.webContents, senderFrame: modal.webContents.mainFrame }
@@ -1778,7 +1829,7 @@ describe('desktop main startup', () => {
     expect(replacement.updateTasks.mock.calls).toEqual([['inspect']])
     expect(replacement.stop).not.toHaveBeenCalled()
     if (mandatory) {
-      expect(harness.windows).toHaveLength(1)
+      expect(productWindows()).toHaveLength(1)
       expect(harness.windows[0]!.isDestroyed()).toBe(false)
     }
   })
@@ -1815,7 +1866,7 @@ describe('desktop main startup', () => {
     expect(replacement.updateTasks.mock.calls).toEqual([['inspect']])
     expect(replacement.stop).not.toHaveBeenCalled()
     if (mandatory) {
-      expect(harness.windows).toHaveLength(1)
+      expect(productWindows()).toHaveLength(1)
       expect(harness.windows[0]!.isDestroyed()).toBe(false)
     }
   })
@@ -2078,7 +2129,7 @@ describe('desktop main startup', () => {
   it('prepares recovery offscreen and starts one Host before choosing the first visible window', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
-    expect(harness.windows).toHaveLength(1)
+    expect(productWindows()).toHaveLength(1)
     const window = harness.windows[0]!
     expect(window.options.show).toBe(false)
     expect(window.show).not.toHaveBeenCalled()
@@ -2105,7 +2156,7 @@ describe('desktop main startup', () => {
     expect(console.warn).toHaveBeenCalledWith('desktop login shell: /account/shell failed (timeout)')
     expect(harness.analytics).toHaveBeenCalledExactlyOnceWith({ eventName: 'desktop_app_launch', timestamp: Date.now(), attributes: {} })
     expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
-    expect(harness.windows).toHaveLength(1)
+    expect(productWindows()).toHaveLength(1)
     expect(window.urls).toEqual(['dsh-app://app/'])
   })
 
@@ -2189,7 +2240,7 @@ describe('desktop main startup', () => {
     await harness.quitCompleted.promise
     expect(host.stop).toHaveBeenCalledTimes(1)
     expect(window.urls).toEqual(['dsh-app://app/'])
-    expect(harness.windows).toHaveLength(1)
+    expect(productWindows()).toHaveLength(1)
   })
 })
 

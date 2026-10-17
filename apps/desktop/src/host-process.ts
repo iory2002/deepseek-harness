@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import type { PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
 import { desktopNodeEnvironment } from './node-environment.ts'
+import { parseHostWorkStatus, type DesktopWorkStatus } from './work-status.ts'
 
 interface ReadyEvent {
   readonly type: 'ready'
@@ -34,6 +35,11 @@ type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | { reado
   readonly activeTasks: boolean
   readonly scheduledTasks: boolean
   readonly error?: string
+} | {
+  readonly type: 'work-status'
+  readonly requestId: number
+  readonly status?: DesktopWorkStatus
+  readonly error?: string
 }
 
 /** Correlated answer to one shell control request. */
@@ -47,6 +53,9 @@ export interface DesktopQuitInspection {
 
 /** Quit inspection deadline; a slower Host counts as unknown work and the shell asks before quitting. */
 export const QUIT_INSPECTION_DEADLINE_MS = 2_000
+
+/** Work report deadline; the shell holds the poll in flight for at most this long. */
+export const WORK_STATUS_DEADLINE_MS = 5_000
 
 const MAX_HOST_DIAGNOSTIC_CHARS = 64 * 1024
 
@@ -85,6 +94,10 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
     case 'quit-inspection':
       return Number.isSafeInteger(candidate.requestId) && typeof candidate.activeTasks === 'boolean'
         && typeof candidate.scheduledTasks === 'boolean' && (candidate.error === undefined || typeof candidate.error === 'string')
+    case 'work-status':
+      if (!Number.isSafeInteger(candidate.requestId)) return false
+      if (candidate.error !== undefined) return typeof candidate.error === 'string'
+      return parseHostWorkStatus(candidate.status) !== undefined
     default:
       return false
   }
@@ -257,13 +270,26 @@ export class DesktopHostProcess {
     return { activeTasks: response.activeTasks, scheduledTasks: response.scheduledTasks }
   }
 
+  /**
+   * Read the Host's current work for the companion window.
+   * @returns the reported snapshot; rejects when the Host is unavailable or misses
+   *   {@link WORK_STATUS_DEADLINE_MS}.
+   */
+  async workStatus(): Promise<DesktopWorkStatus> {
+    const response = await this.control({ type: 'work-status' }, WORK_STATUS_DEADLINE_MS, 'desktop work: work inspection timed out')
+    if (response.type !== 'work-status' || response.status === undefined) {
+      throw new Error('desktop work: Host answered with a different control response')
+    }
+    return response.status
+  }
+
   private async control(
-    request: { readonly type: 'update-tasks'; readonly action: 'inspect' | 'lock' | 'unlock' } | { readonly type: 'quit-inspection' },
+    request: { readonly type: 'update-tasks'; readonly action: 'inspect' | 'lock' | 'unlock' } | { readonly type: 'quit-inspection' } | { readonly type: 'work-status' },
     deadlineMs: number, deadlineMessage: string,
   ): Promise<DesktopHostControlResponse> {
     const child = this.child
     if (child === undefined || !child.connected || this.failureReported || this.stopping) {
-      throw new Error(`${request.type === 'update-tasks' ? 'desktop update' : 'desktop quit'}: Host is unavailable`)
+      throw new Error(`${request.type === 'update-tasks' ? 'desktop update' : request.type === 'quit-inspection' ? 'desktop quit' : 'desktop work'}: Host is unavailable`)
     }
     const requestId = this.nextControlId++
     let timer: ReturnType<typeof setTimeout> | undefined

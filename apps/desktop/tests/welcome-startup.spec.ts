@@ -100,6 +100,15 @@ vi.mock('electron', () => ({
 }))
 // The Windows tray relabels through Menu as well; keep the menu call counts below platform-neutral.
 vi.mock('../src/tray.ts', () => ({ DesktopTray: class { relabel() {} dispose() {} } }))
+// The companion is a second always-on-top window the welcome flow never shows;
+// this spec's BrowserWindow stands in for the primary one only.
+vi.mock('../src/pet-window.ts', () => ({ DesktopPetWindow: class {
+  readonly visible = false
+  show(): Promise<void> { return Promise.resolve() }
+  toggle(): void {}
+  setScale(): void {}
+  dispose(): void {}
+} }))
 
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: '/profile' }) }))
 vi.mock('../src/login-shell-environment.ts', async importOriginal => ({

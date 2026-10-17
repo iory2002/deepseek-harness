@@ -10,6 +10,10 @@ export interface DesktopTrayOptions {
   readonly locale: () => DesktopLocale
   /** Show and focus the primary window. */
   readonly open: () => void
+  /** Toggle the always-on-top companion window. */
+  readonly toggleCompanion: () => void
+  /** @returns whether the companion is currently on screen. */
+  readonly companionVisible: () => boolean
   /** Request quit through the same confirmation as every other quit entry. */
   readonly quit: () => void
 }
@@ -18,7 +22,7 @@ export interface DesktopTrayOptions {
 export class DesktopTray {
   private tray: Tray | undefined
 
-  /** @param options - Icon path, locale reader, and the open and quit actions. */
+  /** @param options - Icon path, locale reader, and the open, companion, and quit actions. */
   constructor(private readonly options: DesktopTrayOptions) {
     const tray = new Tray(nativeImage.createFromPath(options.iconPath))
     this.tray = tray
@@ -34,6 +38,10 @@ export class DesktopTray {
     tray.setToolTip(messages.aboutProduct)
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: messages.openApplication, click: () => { this.options.open() } },
+      {
+        label: this.options.companionVisible() ? messages.petHide : messages.petShow,
+        click: () => { this.options.toggleCompanion(); this.relabel() },
+      },
       { type: 'separator' },
       { label: messages.quitApplication, click: () => { this.options.quit() } },
     ]))

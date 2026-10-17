@@ -1,4 +1,4 @@
-/** Type-only Electron update declarations shared by the settings UI and Desktop compatibility checks. */
+/** Type-only Electron update and companion declarations shared by the settings UI and Desktop compatibility checks. */
 
 /** Classified failure copy selected by the Web locale without exposing raw updater diagnostics. */
 export type DesktopUpdateFailureKind =
@@ -32,4 +32,23 @@ export interface DesktopUpdateView {
   readonly presentation?: DesktopUpdatePresentation
   readonly failed: boolean
   readonly opening: boolean
+}
+
+/** Offered companion window sizes, smallest first; the shell owns both the window and its steps. */
+export type DesktopCompanionScale = 0.85 | 1 | 1.25
+
+/**
+ * Optional carrier API for the Electron desktop companion window. It arrived
+ * after protocol 1, so consumers feature-detect this member rather than the
+ * carrier's protocol version.
+ */
+export interface DesktopCompanionBridge {
+  size(): Promise<DesktopCompanionScale>
+  setSize(scale: DesktopCompanionScale): Promise<DesktopCompanionScale>
+}
+
+/** Companion size the General row shows; a refused change restores the previous step and raises `failed`. */
+export interface DesktopCompanionSizeView {
+  readonly scale: DesktopCompanionScale
+  readonly failed: boolean
 }

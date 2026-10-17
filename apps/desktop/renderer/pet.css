@@ -1,0 +1,524 @@
+/* Desktop companion: transparent window, four poses, a symbol band, and props. */
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: system-ui, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  user-select: none;
+  cursor: default;
+}
+
+#pet {
+  --accent: #94a3b8;
+  --pet-scale: 1;
+  /* Night halves every motion amplitude; the director owns the rest of the timing. */
+  --amp: 1;
+  /* Laid out at the design size and scaled as a whole, so one step moves every
+     element together; the window is sized to match. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 220px;
+  height: 360px;
+  transform: scale(var(--pet-scale));
+  transform-origin: top left;
+  background: transparent;
+}
+
+#pet[data-phase="idle"] { --accent: #4ade80; }
+#pet[data-phase="working"] { --accent: #60a5fa; }
+#pet[data-phase="waiting"] { --accent: #fbbf24; }
+#pet[data-phase="subagent"] { --accent: #c084fc; }
+#pet[data-phase="background"] { --accent: #2dd4bf; }
+#pet[data-phase="offline"] { --accent: #f87171; }
+
+/* Attention halo behind the sprite while an answer is owed. */
+#pet::after {
+  content: "";
+  position: absolute;
+  inset: 94px 0 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent), transparent 72%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease-out;
+}
+
+#pet[data-phase="waiting"]::after {
+  opacity: 0.3;
+  animation: halo 1.3s ease-in-out infinite;
+}
+
+/* Ambient breathing and sway live here; the cue animation owns #stage, so the
+   two never fight over the same transform. */
+#body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+
+#stage {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 150px;
+  height: 263px;
+  margin-left: -75px;
+  display: grid;
+  place-items: end center;
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+
+#stage img {
+  grid-area: 1 / 1;
+  width: 150px;
+  height: 263px;
+  object-fit: contain;
+  object-position: bottom;
+  filter: drop-shadow(0 8px 12px rgba(2, 6, 23, 0.42));
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* Her head reads at one size across poses, so the celebration frame is wider. */
+#stage img[data-pose="happy"] {
+  width: 184px;
+}
+
+#pet[data-pose="stand"] #pose-stand,
+#pet[data-pose="work"] #pose-work,
+#pet[data-pose="idle"] #pose-idle,
+#pet[data-pose="happy"] #pose-happy {
+  opacity: 1;
+}
+
+#pet[data-phase="offline"] #pose-stand {
+  filter: grayscale(0.5) drop-shadow(0 8px 12px rgba(2, 6, 23, 0.42));
+}
+
+/* Symbol band: the strip between the status chip and her head. */
+#symbol {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  right: 0;
+  height: 64px;
+  pointer-events: none;
+}
+
+#symbol > * {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+#symbol-question {
+  left: 50%;
+  margin-left: 26px;
+  top: 6px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1.5px solid #fbbf24;
+  color: #fbbf24;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#symbol-note {
+  left: 30px;
+  top: 18px;
+  color: #2dd4bf;
+  font-size: 18px;
+  text-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
+}
+
+#symbol-zzz {
+  left: 50%;
+  margin-left: 20px;
+  top: 26px;
+  color: #cbd5e1;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-shadow: 0 0 7px rgba(203, 213, 225, 0.75);
+}
+
+#symbol-sweat {
+  left: 50%;
+  margin-left: -66px;
+  top: 2px;
+  width: 132px;
+  height: 54px;
+}
+
+#symbol-sweat i {
+  position: absolute;
+  width: 8px;
+  height: 13px;
+  border-radius: 60% 60% 50% 50% / 78% 78% 42% 42%;
+  background: linear-gradient(180deg, #ffffff, #dbeafe);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.95), 0 0 3px rgba(96, 165, 250, 0.9);
+  animation: drip 1.7s ease-in infinite;
+}
+
+#symbol-sweat i:nth-child(1) { left: 14px; top: 6px; animation-delay: 0.1s; }
+#symbol-sweat i:nth-child(2) { left: 110px; top: 12px; animation-delay: 0.7s; }
+#symbol-sweat i:nth-child(3) { left: 36px; top: 0; animation-delay: 1.2s; }
+
+#symbol-mark {
+  left: 50%;
+  margin-left: -4px;
+  top: 2px;
+  width: 8px;
+  height: 28px;
+}
+
+#symbol-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 9px 0;
+  border-radius: 4px;
+  background: #fbbf24;
+  box-shadow: 0 0 7px rgba(251, 191, 36, 0.75);
+}
+
+#symbol-mark::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 0;
+  height: 7px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 7px rgba(251, 191, 36, 0.75);
+}
+
+/* Props live in the side bands, clear of her body. */
+#prop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#prop > * {
+  position: absolute;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+#prop-cup {
+  right: 3px;
+  bottom: 56px;
+  width: 20px;
+  height: 18px;
+  border-radius: 3px 3px 7px 7px;
+  background: #f8fafc;
+  border: 1.5px solid #94a3b8;
+}
+
+#prop-cup::before {
+  content: "";
+  position: absolute;
+  right: -7px;
+  top: 4px;
+  width: 7px;
+  height: 8px;
+  border: 1.5px solid #94a3b8;
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+}
+
+#prop-cup::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -9px;
+  height: 7px;
+  background:
+    radial-gradient(circle at 2px 6px, rgba(226, 232, 240, 0.85) 2px, transparent 2.5px),
+    radial-gradient(circle at 12px 3px, rgba(226, 232, 240, 0.85) 2px, transparent 2.5px);
+}
+
+#prop-clock {
+  left: 4px;
+  bottom: 58px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.8px solid #fbbf24;
+  background: rgba(15, 23, 42, 0.85);
+}
+
+#prop-clock::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 1.6px;
+  height: 7px;
+  margin-left: -0.8px;
+  background: #fbbf24;
+  transform-origin: bottom center;
+}
+
+#prop-clock::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 1.6px;
+  margin-top: -0.8px;
+  background: #fbbf24;
+}
+
+#prop-lamp {
+  right: 0;
+  bottom: 30px;
+  width: 30px;
+  height: 34px;
+}
+
+#prop-lamp::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 24px;
+  height: 14px;
+  background: #fcd34d;
+  clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%);
+}
+
+#prop-lamp::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 2px;
+  height: 16px;
+  background: #94a3b8;
+  box-shadow: 0 16px 0 1px #94a3b8, 0 24px 18px 4px rgba(252, 211, 77, 0.28);
+}
+
+#pet[data-symbol="question"] #symbol-question,
+#pet[data-symbol="note"] #symbol-note,
+#pet[data-symbol="zzz"] #symbol-zzz,
+#pet[data-symbol="sweat"] #symbol-sweat,
+#pet[data-symbol="mark"] #symbol-mark {
+  opacity: 1;
+}
+
+#pet[data-prop="cup"] #prop-cup,
+#pet[data-prop="clock"] #prop-clock,
+#pet[data-prop="lamp"] #prop-lamp {
+  opacity: 1;
+}
+
+/* An open counts card owns the space above her: the numbers come first. */
+#pet[data-card="true"] #symbol > *,
+#pet[data-card="true"] #prop > * {
+  opacity: 0;
+}
+
+#chip {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 3px 12px rgba(2, 6, 23, 0.4);
+  color: #e6edfb;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: opacity 180ms ease-out;
+}
+
+/* The mark owns the window while it lasts; the chip would only compete with it. */
+#pet[data-symbol="mark"] #chip {
+  opacity: 0;
+}
+
+#phase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px var(--accent);
+}
+
+#pet[data-phase="working"] #dot { animation: ping 1.5s ease-out infinite; }
+#pet[data-phase="waiting"] #dot { animation: blink 0.9s steps(2, start) infinite; }
+
+#pet[data-phase="background"] #chip::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.75;
+  animation: sweep 1.7s ease-in-out infinite;
+}
+
+#details {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 9px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.5);
+  color: #dbe4f7;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#counts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+#counts li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#counts li::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+#counts strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+#hint {
+  margin: 6px 0 0;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+#counts:empty {
+  display: none;
+}
+
+#counts:empty + #hint {
+  margin-top: 0;
+}
+
+@media (prefers-color-scheme: light) {
+  #chip {
+    background: rgba(255, 255, 255, 0.93);
+    border-color: rgba(15, 23, 42, 0.12);
+    color: #1e293b;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.22);
+  }
+
+  #details {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(15, 23, 42, 0.12);
+    color: #334155;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.24);
+  }
+
+  #counts strong {
+    color: #0f172a;
+  }
+
+  #symbol-question {
+    background: rgba(255, 255, 255, 0.95);
+    color: #b45309;
+    border-color: #d97706;
+  }
+}
+
+/*
+ * Reduced motion keeps every state readable without movement: the director
+ * still swaps poses and symbols, the performer simply does not animate them.
+ */
+@media (prefers-reduced-motion: reduce) {
+  #pet::after,
+  #dot,
+  #symbol-sweat i,
+  #pet[data-phase="background"] #chip::after,
+  #stage img,
+  #symbol > *,
+  #prop > *,
+  #chip {
+    animation: none;
+    transition: none;
+  }
+}
+
+@keyframes drip {
+  0% { opacity: 0; transform: translateY(-2px) scale(0.5); }
+  18% { opacity: 1; transform: translateY(1px) scale(1); }
+  72% { opacity: 1; transform: translateY(8px) scale(1); }
+  100% { opacity: 0; transform: translateY(14px) scale(0.7); }
+}
+
+@keyframes halo {
+  0%, 100% { opacity: 0.18; transform: scale(0.94); }
+  50% { opacity: 0.38; transform: scale(1.02); }
+}
+
+@keyframes ping {
+  0% { box-shadow: 0 0 0 0 var(--accent); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes sweep {
+  0% { transform: scaleX(0.2); transform-origin: left center; }
+  50% { transform: scaleX(1); transform-origin: left center; }
+  100% { transform: scaleX(0.2); transform-origin: right center; }
+}

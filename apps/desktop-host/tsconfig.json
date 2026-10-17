@@ -16,6 +16,8 @@
     { "path": "../../packages/skill/skill-office" },
     { "path": "../../packages/util/home-paths" },
     { "path": "../../packages/skill/tool-workspace-dependencies" },
+    { "path": "../../packages/interaction/user-approval" },
+    { "path": "../../packages/interaction/user-questions" },
     {
       "path": "../cli"
     },
