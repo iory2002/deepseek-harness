@@ -87,6 +87,15 @@
   transition: none;
 }
 
+/* A plain column is a frame column, not a dock against the Conversation: under
+   the workspace-center arrangement this surface takes the frame's left column,
+   where the docked pane's leading hairline would draw the seam against the
+   window instead of between the two columns. The frame owns that seam
+   (ui-layout AppFrame's centre trailing edge). */
+.panel[data-sidebar-right-role='plain'] :global([data-dockkit-host='dock'][data-dockkit-column='0'] > [data-dockkit-content]) {
+  border-left: none;
+}
+
 /* No whole-box subtraction here: Electron drag regions are window geometry,
    not stacking, so a strip row inside this fullscreen content that marks itself
    `data-window-drag` (ui-dockkit) still owns the drag over its own box, and

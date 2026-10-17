@@ -69,6 +69,16 @@
   overflow: hidden;
 }
 
+/* Workspace-center swaps the two surfaces: the centre hosts the workspace
+   surface and the right column the Conversation. Both paint the base ground, so
+   the two frames meet without a seam; under the docked arrangement the docked
+   workspace surface draws that seam itself (ui-dockkit's docked left edge). The
+   line belongs to the centre column's trailing edge, which moves with the track
+   and disappears with it when the right column has no track. */
+.frame[data-layout-arrangement='workspace-center']:not([data-rightbar-collapsed]) .centerCol {
+  border-right: 0.5px solid var(--dsw-alias-border-l4);
+}
+
 /* macOS desktop: the frame goes transparent so window vibrancy reaches the
    sidebar column, which keeps only a translucent tint; the centre paints the
    base background itself to stay opaque. The sidebar/centre separator moves
