@@ -29,6 +29,9 @@ function mount() {
     useSessionStatus: bindSnapshotSelector(createSnapshotStore<SessionStatusSnapshot>(new Map())),
     useSessionRetainInfo: () => undefined,
     useResource,
+    useRemoteAccess: () => true,
+    useSessionAccess: () => true,
+    useWorkspaceAccess: () => true,
     useWorkspaces: bindSnapshotSelector(createSnapshotStore<WorkspaceSnapshot>({
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     })),

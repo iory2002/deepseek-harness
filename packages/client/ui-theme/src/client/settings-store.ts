@@ -1,11 +1,10 @@
 /**
- * Typography settings stores: mirrors of the theme service's font state. The
- * plugin's apply-world change listener is the only writer; the Appearance row
- * and both font surfaces read via props.useStore.
+ * Appearance and font row slot stores: mirrors of the theme service
+ * snapshot. The plugin's apply-world change listener is the only writer; the
+ * row components read via props.useStore.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import { DEFAULT_FONT_SIZE, DEFAULT_WORKSPACE_FONT_SIZE, type ThemePreference } from '../theme-settings.ts'
-import type { FontOverride } from '../font-catalog.ts'
+import { DEFAULT_FONT_SIZES, type FontFamilies, type FontSizes, type ThemePreference } from '../theme-settings.ts'
 
 /** Store state mirrored from the theme snapshot. */
 export interface AppearanceRowState {
@@ -37,40 +36,33 @@ export function createAppearanceRowStore(): EngineStoreHandle<AppearanceRowState
   })
 }
 
-/** Store state mirrored from the theme snapshot's typography. */
-export interface TypographyState {
-  /** Persisted content font size in px. */
-  fontSize: number
-  /** Persisted workspace document font size in px. */
-  workspaceFontSize: number
-  /** Persisted pinned typography tokens, in catalog table order. */
-  fonts: readonly FontOverride[]
+/** Store state mirrored from the theme snapshot's fonts (shared by the font-size row and the font settings group). */
+export interface FontRowState {
+  /** Persisted font sizes in px by role. */
+  fontSizes: FontSizes
+  /** Persisted normalized font lists by role. */
+  fontFamilies: FontFamilies
   /** Service revision; -1 until first sync so revision 0 lands as a change. */
   revision: number
 }
 
 /** Declared action shape giving the exported factory a stable return type. */
-type TypographyActions = {
-  sync: (draft: TypographyState, fontSize: number, workspaceFontSize: number,
-    fonts: readonly FontOverride[], revision: number) => void
+type FontRowActions = {
+  sync: (draft: FontRowState, fontSizes: FontSizes, fontFamilies: FontFamilies, revision: number) => void
 }
 
 /**
- * Declares the typography state and write surface shared by the font-size rows,
- * the font settings table, and the button row that opens it.
+ * Declares the font rows' state and write surface.
  * @returns the store handle.
  */
-export function createTypographyStore(): EngineStoreHandle<TypographyState, TypographyActions> {
+export function createFontRowStore(): EngineStoreHandle<FontRowState, FontRowActions> {
   return defineStore({
-    init: (): TypographyState => ({
-      fontSize: DEFAULT_FONT_SIZE, workspaceFontSize: DEFAULT_WORKSPACE_FONT_SIZE, fonts: [], revision: -1,
-    }),
+    init: (): FontRowState => ({ fontSizes: DEFAULT_FONT_SIZES, fontFamilies: { text: '', code: '', terminal: '' }, revision: -1 }),
     actions: {
-      sync: (d, fontSize: number, workspaceFontSize: number, fonts: readonly FontOverride[], revision: number) => {
+      sync: (d, fontSizes: FontSizes, fontFamilies: FontFamilies, revision: number) => {
         if (revision <= d.revision) return
-        d.fontSize = fontSize
-        d.workspaceFontSize = workspaceFontSize
-        d.fonts = fonts
+        d.fontSizes = fontSizes
+        d.fontFamilies = fontFamilies
         d.revision = revision
       },
     },

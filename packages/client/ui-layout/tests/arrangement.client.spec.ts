@@ -17,7 +17,7 @@ function hostScope(accepted: LayoutArrangement) {
   const listeners = new Set<() => void>()
   let snapshot: ConfigFormSnapshot<LayoutSettings> = {
     status: 'ready', value: { arrangement: accepted }, base: undefined, user: undefined,
-    revision: 1, writable: true, mode: 'host',
+    revision: 1, writable: true,
   }
   const notify = (): void => { for (const listener of listeners) listener() }
   const set = vi.fn(async (_field: string, value: unknown): Promise<boolean> => {
@@ -94,7 +94,7 @@ describe('layout arrangement binding', () => {
     const pending = createLayoutStore().create()
     const unresolved = hostScope('conversation-center')
     let snapshot: ConfigFormSnapshot<LayoutSettings> = {
-      status: 'loading', value: undefined, base: undefined, user: undefined, revision: undefined, writable: true, mode: 'host',
+      status: 'loading', value: undefined, base: undefined, user: undefined, revision: undefined, writable: true,
     }
     const pendingForm: ConfigForm<LayoutSettings> = { ...unresolved.form, getSnapshot: () => snapshot }
     bindLayoutArrangement(pending, pendingForm)
@@ -107,7 +107,7 @@ describe('layout arrangement binding', () => {
     const local = hostScope('conversation-center')
     snapshot = {
       status: 'ready', value: { arrangement: 'conversation-center' }, base: undefined, user: undefined,
-      revision: 1, writable: false, mode: 'memory',
+      revision: 1, writable: false,
     }
     bindLayoutArrangement(memory, { ...local.form, getSnapshot: () => snapshot })
     memory.actions.setArrangement('workspace-center')

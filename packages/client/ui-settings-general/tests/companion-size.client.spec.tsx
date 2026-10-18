@@ -35,6 +35,9 @@ const kit = {
   useSessionRetainInfo: () => undefined,
   useResource,
   useWorkspaces: unusedHook,
+  useRemoteAccess: unusedHook,
+  useSessionAccess: unusedHook,
+  useWorkspaceAccess: unusedHook,
 }
 
 /** Dictionary lookup with parameter substitution, like the production locale chain. */
