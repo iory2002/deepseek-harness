@@ -5,7 +5,7 @@
  */
 
 /** Work states the companion window renders. */
-export type DesktopWorkPhase = 'starting' | 'idle' | 'working' | 'waiting' | 'subagent' | 'background' | 'offline'
+export type DesktopWorkPhase = 'starting' | 'idle' | 'working' | 'waiting' | 'approval' | 'subagent' | 'background' | 'offline'
 
 /** Work the companion window renders, including the shell-owned startup and offline states. */
 export interface DesktopWorkStatus {
@@ -27,7 +27,7 @@ export interface DesktopWorkStatus {
 }
 
 /** Phases a Host may report; `starting` and `offline` belong to the shell alone. */
-const HOST_PHASES: ReadonlySet<string> = new Set(['idle', 'working', 'waiting', 'subagent', 'background'])
+const HOST_PHASES: ReadonlySet<string> = new Set(['idle', 'working', 'waiting', 'approval', 'subagent', 'background'])
 
 /** Status shown until the Host answers its first work request. */
 export const STARTING_WORK_STATUS: DesktopWorkStatus = { phase: 'starting', agents: 0, subagents: 0, jobs: 0, waits: 0, completed: 0 }

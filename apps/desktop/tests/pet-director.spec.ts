@@ -30,6 +30,8 @@ describe('companion director', () => {
       .toMatchObject({ action: 'busyJitter', pose: 'stand', symbol: 'sweat', prop: 'cup' })
     expect(cueFor({ type: 'presentation', presentation: presentation({ status: { phase: 'waiting', waits: 1 } }) }))
       .toMatchObject({ action: 'waitWave', pose: 'work', symbol: 'question', prop: 'clock' })
+    expect(cueFor({ type: 'presentation', presentation: presentation({ status: { phase: 'approval', waits: 1 } }) }))
+      .toMatchObject({ action: 'waitWave', pose: 'work', symbol: 'question', prop: 'clock' })
     expect(cueFor({ type: 'presentation', presentation: presentation({ status: { phase: 'subagent' } }) }))
       .toMatchObject({ action: 'glance', pose: 'stand' })
     expect(cueFor({ type: 'presentation', presentation: presentation({ status: { phase: 'background' } }) }))

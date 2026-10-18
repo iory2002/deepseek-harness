@@ -4,6 +4,7 @@ import type { JobEventFilter, JobEventListener, JobStatus, JobView } from '@deep
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type {} from '@deepseek-ai/dsh-user-questions'
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installDesktopWorkStatusInspection } from '../src/work-status.ts'
 
@@ -82,7 +83,21 @@ function askQuestion(): { readonly answer: Promise<unknown>; settle: () => void 
   return { answer: settle.promise, settle: () => { settle.resolve({ answers: [] }) } }
 }
 
-beforeEach(() => {
+/** A pending approval the test can answer later. */
+function askApproval(): { readonly answer: Promise<ApprovalOutcome>; settle: () => void } {
+  const settle = Promise.withResolvers<ApprovalOutcome>()
+  void ctx.waterfall('approval/request', {} as never, () => settle.promise)
+  return { answer: settle.promise, settle: () => { settle.resolve('allowed-once') } }
+}
+
+/**
+ * Rebuild the Host context. `claim` registers an answerer ahead of the inspector,
+ * the position the Web bridge occupies when it forwards a request to its Client.
+ */
+function boot(claim?: {
+  readonly event: 'approval/request' | 'user-questions/request'
+  readonly answer: () => Promise<unknown>
+}): void {
   live.length = 0
   topLevel.length = 0
   registryJobs.length = 0
@@ -91,8 +106,11 @@ beforeEach(() => {
   // Narrow service doubles exercise the inspector against a real Cordis event lifecycle.
   ctx.provide('agents', { list: () => live, roots: () => live.filter(state => topLevel.includes(state.id)) } as never)
   new RosterOnlyJobRegistry(ctx)
+  if (claim !== undefined) ctx.on(claim.event as never, claim.answer as never)
   inspect = installDesktopWorkStatusInspection(ctx)
-})
+}
+
+beforeEach(() => { boot() })
 
 afterEach(async () => { await ctx.fiber.dispose() })
 
@@ -147,6 +165,46 @@ describe('Desktop Host work status', () => {
     void ctx.waterfall('user-questions/request', { questions: [] }, () => settle.promise)
     expect(inspect()).toEqual({ phase: 'waiting', agents: 1, subagents: 0, jobs: 0, waits: 1, completed: 0 })
     settle.resolve({ answers: [] })
+  })
+
+  it('counts a pending approval as approval waiting and clears it when answered', async () => {
+    const pending = askApproval()
+    expect(inspect()).toEqual({ phase: 'approval', agents: 0, subagents: 0, jobs: 0, waits: 1, completed: 0 })
+    pending.settle()
+    await pending.answer
+    expect(inspect()).toEqual({ phase: 'idle', agents: 0, subagents: 0, jobs: 0, waits: 0, completed: 1 })
+  })
+
+  it('keeps an approval ahead of a pending question and of running work', () => {
+    agent('busy', 'running')
+    const asked = askQuestion()
+    expect(inspect()).toMatchObject({ phase: 'waiting', waits: 1 })
+    const approval = askApproval()
+    expect(inspect()).toEqual({ phase: 'approval', agents: 1, subagents: 0, jobs: 0, waits: 2, completed: 0 })
+    approval.settle()
+    asked.settle()
+  })
+
+  it('counts an approval the Client bridge holds without delegating', async () => {
+    const held = Promise.withResolvers<ApprovalOutcome>()
+    await ctx.fiber.dispose()
+    boot({ event: 'approval/request', answer: () => held.promise })
+    const asked = ctx.waterfall('approval/request', {} as never, () => Promise.resolve<ApprovalOutcome>('unavailable'))
+    expect(inspect()).toEqual({ phase: 'approval', agents: 0, subagents: 0, jobs: 0, waits: 1, completed: 0 })
+    held.resolve('allowed-once')
+    await asked
+    expect(inspect()).toEqual({ phase: 'idle', agents: 0, subagents: 0, jobs: 0, waits: 0, completed: 1 })
+  })
+
+  it('counts a question the Client bridge holds without delegating', async () => {
+    const held = Promise.withResolvers<AskUserQuestionAnswer>()
+    await ctx.fiber.dispose()
+    boot({ event: 'user-questions/request', answer: () => held.promise })
+    const asked = ctx.waterfall('user-questions/request', { questions: [] }, () => Promise.resolve({ answers: [] }))
+    expect(inspect()).toEqual({ phase: 'waiting', agents: 0, subagents: 0, jobs: 0, waits: 1, completed: 0 })
+    held.resolve({ answers: [] })
+    await asked
+    expect(inspect()).toEqual({ phase: 'idle', agents: 0, subagents: 0, jobs: 0, waits: 0, completed: 1 })
   })
 
   it('restores the delegated request outcome after observing it', async () => {

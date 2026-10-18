@@ -207,6 +207,7 @@ describe('desktop companion window', () => {
       status: working, copy: zhCopy, celebrating: false, scale: 1, waitSeconds: 0, idleSeconds: 0, night: false,
     })
     expect(zhCopy.phases.working).toBe('工作中')
+    expect(zhCopy.phases.approval).toBe('等待审批')
     expect(zhCopy.hint).toBe('拖动可移动 · 双击打开应用')
   })
 
@@ -456,7 +457,7 @@ describe('companion size step', () => {
 
 describe('companion work status parsing', () => {
   it('accepts every host phase and count', () => {
-    for (const phase of ['idle', 'working', 'waiting', 'subagent', 'background']) {
+    for (const phase of ['idle', 'working', 'waiting', 'approval', 'subagent', 'background']) {
       expect(parseHostWorkStatus({ phase, agents: 1, subagents: 2, jobs: 3, waits: 4, completed: 5 }))
         .toEqual({ phase, agents: 1, subagents: 2, jobs: 3, waits: 4, completed: 5 })
     }

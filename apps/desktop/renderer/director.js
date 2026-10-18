@@ -47,6 +47,7 @@ const PHASE_WEIGHT = {
   starting: 0,
   idle: 1,
   working: 0.35,
+  approval: 0.25,
   waiting: 0.25,
   subagent: 0.6,
   offline: 0,
@@ -86,6 +87,7 @@ function phaseCue(state) {
       return { action: 'tidy', pose: 'stand', symbol: null, prop: null }
     case 'working':
       return { action: 'busyJitter', pose: 'stand', symbol: 'sweat', prop: 'cup' }
+    case 'approval':
     case 'waiting': {
       const waited = state.waitSeconds * 1_000
       const action = waited >= PET_WAIT_DESPERATE_MS
@@ -160,8 +162,9 @@ function resolve(state, now) {
   } else {
     const base = phaseCue(state)
     cue = { ...base, priority: PRIORITY.ambient }
-    if (cue.prop === null && state.night) cue.prop = 'lamp'
   }
+  // Night brings a lamp whenever the motion did not already want a prop.
+  if (cue.prop === null && state.night) cue.prop = 'lamp'
   // An open counts card owns the space above her: the numbers come first.
   if (state.card) cue = { ...cue, symbol: null, prop: null }
   return cue

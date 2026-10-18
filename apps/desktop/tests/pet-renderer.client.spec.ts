@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { PET_IPC } from '../src/pet-api.ts'
 
 const copy = {
-  phases: { starting: '', idle: '', working: '', waiting: '', subagent: '', background: '', offline: '' },
+  phases: { starting: '', idle: '', working: '', approval: '', waiting: '', subagent: '', background: '', offline: '' },
   agents: 'agents',
   subagents: 'subagents',
   jobs: 'jobs',

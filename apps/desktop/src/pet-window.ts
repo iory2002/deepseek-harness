@@ -62,6 +62,7 @@ export function desktopPetCopy(locale: DesktopLocale): DesktopPetCopy {
       starting: messages.petPhaseStarting,
       idle: messages.petPhaseIdle,
       working: messages.petPhaseWorking,
+      approval: messages.petPhaseApproval,
       waiting: messages.petPhaseWaiting,
       subagent: messages.petPhaseSubagent,
       background: messages.petPhaseBackground,

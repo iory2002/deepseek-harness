@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-user-questions'
 
 /** Primary state the shell shows for the Host's work. */
-export type DesktopWorkPhase = 'idle' | 'working' | 'waiting' | 'subagent' | 'background'
+export type DesktopWorkPhase = 'idle' | 'working' | 'waiting' | 'approval' | 'subagent' | 'background'
 
 /** Point-in-time account of the work one Desktop Host is running. */
 export interface DesktopWorkStatus {
@@ -41,23 +41,28 @@ function isLiveJob(status: JobStatus): boolean {
 
 /**
  * Register the work inspector on the owning Host context.
+ *
+ * The counting listeners register ahead of every answerer: the Web bridge claims
+ * a forwarded request and waits for its Client without delegating, so a listener
+ * behind it would never see the request as pending. They only count and delegate,
+ * so the composed answerers observe no change in order or outcome.
  * @param ctx - Booted Desktop profile context; disposal makes the inspector reject.
  * @returns Inspector reporting the current work snapshot. Pending interactions are counted
- *   from the first dispatch after registration; the counting listeners only delegate, so the
- *   composed answerers observe no change in order or outcome.
+ *   from the first dispatch after registration.
  */
 export function installDesktopWorkStatusInspection(ctx: Context): () => DesktopWorkStatus {
   let stopped = false
   ctx.effect(() => () => { stopped = true })
-  let waits = 0
+  let approvals = 0
+  let questions = 0
   ctx.on('approval/request', async (_request, next) => {
-    waits++
-    try { return await next() } finally { waits-- }
-  })
+    approvals++
+    try { return await next() } finally { approvals-- }
+  }, { prepend: true })
   ctx.on('user-questions/request', async (_request, next) => {
-    waits++
-    try { return await next() } finally { waits-- }
-  })
+    questions++
+    try { return await next() } finally { questions-- }
+  }, { prepend: true })
   /** Whether the previous observation still had work in flight. */
   let carrying = false
   let completed = 0
@@ -82,11 +87,15 @@ export function installDesktopWorkStatusInspection(ctx: Context): () => DesktopW
       for (const job of jobs.list(owner)) if (isLiveJob(job.status)) liveJobs.add(job.id)
     }
     const background = liveJobs.size
-    const phase: DesktopWorkPhase = waits > 0 ? 'waiting'
-      : subagents > 0 ? 'subagent'
-        : running > 0 ? 'working'
-          : background > 0 ? 'background'
-            : 'idle'
+    const waits = approvals + questions
+    // An approval holds the work it guards, so it outranks a pending question,
+    // which in turn outranks every state that is not waiting for a person.
+    const phase: DesktopWorkPhase = approvals > 0 ? 'approval'
+      : questions > 0 ? 'waiting'
+        : subagents > 0 ? 'subagent'
+          : running > 0 ? 'working'
+            : background > 0 ? 'background'
+              : 'idle'
     return { phase, agents: running, subagents, jobs: background, waits }
   }
 

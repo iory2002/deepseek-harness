@@ -20,6 +20,9 @@ body {
   --pet-scale: 1;
   /* Night halves every motion amplitude; the director owns the rest of the timing. */
   --amp: 1;
+  /* Overwritten per pose below; these are the standing frame's values. */
+  --head-top: 94px;
+  --head-x: 50%;
   /* Laid out at the design size and scaled as a whole, so one step moves every
      element together; the window is sized to match. */
   position: absolute;
@@ -34,25 +37,32 @@ body {
 
 #pet[data-phase="idle"] { --accent: #4ade80; }
 #pet[data-phase="working"] { --accent: #60a5fa; }
-#pet[data-phase="waiting"] { --accent: #fbbf24; }
+#pet[data-phase="waiting"],
+#pet[data-phase="approval"] { --accent: #fbbf24; }
 #pet[data-phase="subagent"] { --accent: #c084fc; }
 #pet[data-phase="background"] { --accent: #2dd4bf; }
 #pet[data-phase="offline"] { --accent: #f87171; }
 
-/* Attention halo behind the sprite while an answer is owed. */
+/* Attention halo behind the sprite while an answer is owed. It hangs off the
+   current pose's head, so it stays around her rather than floating mid-air. */
 #pet::after {
   content: "";
   position: absolute;
-  inset: 94px 0 0;
+  left: 50%;
+  width: 156px;
+  margin-left: -78px;
+  top: calc(var(--head-top) + 6px);
+  bottom: 8px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, var(--accent), transparent 72%);
+  background: radial-gradient(closest-side, var(--accent), transparent 70%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 240ms ease-out;
 }
 
-#pet[data-phase="waiting"]::after {
-  opacity: 0.3;
+#pet[data-phase="waiting"]::after,
+#pet[data-phase="approval"]::after {
+  opacity: 0.22;
   animation: halo 1.3s ease-in-out infinite;
 }
 
@@ -102,17 +112,25 @@ body {
   opacity: 1;
 }
 
+/* Her head, per pose. The symbol band, the halo, and the props hang off these:
+   the work and lying frames are short, so a fixed band would leave them far
+   above her head. */
+#pet[data-pose="stand"] { --head-top: 94px; --head-x: 50%; }
+#pet[data-pose="work"] { --head-top: 216px; --head-x: 50%; }
+#pet[data-pose="idle"] { --head-top: 266px; --head-x: 34%; }
+#pet[data-pose="happy"] { --head-top: 116px; --head-x: 50%; }
+
 #pet[data-phase="offline"] #pose-stand {
   filter: grayscale(0.5) drop-shadow(0 8px 12px rgba(2, 6, 23, 0.42));
 }
 
-/* Symbol band: the strip between the status chip and her head. */
+/* Symbol band: the strip just above the current pose's head. */
 #symbol {
   position: absolute;
-  top: 30px;
+  top: calc(var(--head-top) - 62px);
   left: 0;
   right: 0;
-  height: 64px;
+  height: 62px;
   pointer-events: none;
 }
 
@@ -123,9 +141,9 @@ body {
 }
 
 #symbol-question {
-  left: 50%;
-  margin-left: 26px;
-  top: 6px;
+  left: var(--head-x);
+  margin-left: 14px;
+  top: 34px;
   width: 26px;
   height: 26px;
   display: grid;
@@ -139,17 +157,18 @@ body {
 }
 
 #symbol-note {
-  left: 30px;
-  top: 18px;
+  left: var(--head-x);
+  margin-left: -62px;
+  top: 38px;
   color: #2dd4bf;
   font-size: 18px;
   text-shadow: 0 0 8px rgba(45, 212, 191, 0.8);
 }
 
 #symbol-zzz {
-  left: 50%;
-  margin-left: 20px;
-  top: 26px;
+  left: var(--head-x);
+  margin-left: 12px;
+  top: 30px;
   color: #cbd5e1;
   font-size: 11px;
   letter-spacing: 2px;
@@ -157,11 +176,11 @@ body {
 }
 
 #symbol-sweat {
-  left: 50%;
-  margin-left: -66px;
-  top: 2px;
-  width: 132px;
-  height: 54px;
+  left: var(--head-x);
+  margin-left: -74px;
+  top: 30px;
+  width: 148px;
+  height: 32px;
 }
 
 #symbol-sweat i {
@@ -174,14 +193,14 @@ body {
   animation: drip 1.7s ease-in infinite;
 }
 
-#symbol-sweat i:nth-child(1) { left: 14px; top: 6px; animation-delay: 0.1s; }
-#symbol-sweat i:nth-child(2) { left: 110px; top: 12px; animation-delay: 0.7s; }
-#symbol-sweat i:nth-child(3) { left: 36px; top: 0; animation-delay: 1.2s; }
+#symbol-sweat i:nth-child(1) { left: 18px; top: 8px; animation-delay: 0.1s; }
+#symbol-sweat i:nth-child(2) { left: 122px; top: 14px; animation-delay: 0.7s; }
+#symbol-sweat i:nth-child(3) { left: 40px; top: 2px; animation-delay: 1.2s; }
 
 #symbol-mark {
-  left: 50%;
+  left: var(--head-x);
   margin-left: -4px;
-  top: 2px;
+  top: 10px;
   width: 8px;
   height: 28px;
 }
@@ -221,8 +240,8 @@ body {
 }
 
 #prop-cup {
-  right: 3px;
-  bottom: 56px;
+  right: 8px;
+  bottom: 66px;
   width: 20px;
   height: 18px;
   border-radius: 3px 3px 7px 7px;
@@ -255,8 +274,8 @@ body {
 }
 
 #prop-clock {
-  left: 4px;
-  bottom: 58px;
+  left: 6px;
+  bottom: 66px;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -336,11 +355,14 @@ body {
   opacity: 0;
 }
 
+/* The status chip keeps its 100% size in every window step: it is chrome, so
+   the counter-scale cancels #pet's own scale and leaves the label legible. */
 #chip {
   position: absolute;
   top: 8px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(calc(1 / var(--pet-scale)));
+  transform-origin: 50% 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -378,7 +400,8 @@ body {
 }
 
 #pet[data-phase="working"] #dot { animation: ping 1.5s ease-out infinite; }
-#pet[data-phase="waiting"] #dot { animation: blink 0.9s steps(2, start) infinite; }
+#pet[data-phase="waiting"] #dot,
+#pet[data-phase="approval"] #dot { animation: blink 0.9s steps(2, start) infinite; }
 
 #pet[data-phase="background"] #chip::after {
   content: "";
