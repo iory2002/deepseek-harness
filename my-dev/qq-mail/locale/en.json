@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "QQ Mail Sender",
+    "description": "Sends email through your QQ Mail account over SMTP, including file attachments, and adds a send_mail tool the agent can call."
+  }
+}

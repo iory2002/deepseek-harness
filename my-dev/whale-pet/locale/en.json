@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "Blue Whale Pet",
+    "description": "Exposes live agent state (working / waiting on you / done) to a blue-whale desktop companion, and shows a matching mini whale under the composer."
+  },
+  "status": {
+    "idle": "Idle",
+    "busy": "Working",
+    "waiting": "Waiting on you",
+    "done": "Done",
+    "subagent": "Delegated",
+    "dragged": "Being dragged",
+    "unknown": "No contact"
+  },
+  "aria": {
+    "whale": "Blue whale status widget"
+  }
+}

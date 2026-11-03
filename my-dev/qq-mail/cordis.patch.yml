@@ -1,0 +1,10 @@
+- insert:
+    - id: qq-mail
+      name: '@local/qq-mail'
+      config:
+        # QQ Mail's SMTP endpoint. Port 465 is implicit TLS; 587 upgrades with
+        # STARTTLS. Change the host only to send through another SMTP account.
+        smtpHost: 'smtp.qq.com'
+        smtpPort: 465
+        # Display name on the From header. Empty sends the bare address.
+        fromName: ''

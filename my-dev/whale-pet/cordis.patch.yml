@@ -1,0 +1,7 @@
+- insert:
+    - id: whale-pet
+      name: '@local/dsh-whale-pet'
+      config:
+        # Harness home to read the session projection cache from. Omit to use
+        # $DSH_HOME, then ~/.dsh, matching the Harness's own resolution order.
+        dshHome: 'D:\dsh-portable-home'

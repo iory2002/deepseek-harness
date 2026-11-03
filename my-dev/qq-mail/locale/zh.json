@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "QQ 邮箱发信",
+    "description": "通过你的 QQ 邮箱 SMTP 账号发送邮件（支持附件），并为 agent 增加 send_mail 工具。"
+  }
+}

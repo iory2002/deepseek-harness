@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>小蓝鲸 — 六态预览</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 24px; font: 14px/1.5 system-ui, "Microsoft YaHei", sans-serif;
+         background: #0f1220; color: #e8ecff; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p.note { margin: 0 0 20px; opacity: .65; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .card { margin: 0; padding: 12px; border-radius: 12px; background: #1a1f36;
+          display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .card figcaption { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; }
+  .card figcaption b { font-family: ui-monospace, monospace; color: #9db2ff; }
+  .card figcaption span { opacity: .8; }
+  .card figcaption em { font-style: normal; opacity: .6; }
+
+.wp-whale { transform-box: fill-box; transform-origin: 50% 60%; }
+.wp-bob { animation: wp-bob var(--wp-bob-period, 3s) ease-in-out infinite; }
+.wp-tail-part { transform-box: fill-box; transform-origin: 20% 50%; animation: wp-tail var(--wp-tail-period, 3s) ease-in-out infinite; }
+.wp-fin-part { transform-box: fill-box; transform-origin: 50% 10%; animation: wp-fin var(--wp-tail-period, 3s) ease-in-out infinite; }
+.wp-eye { animation: wp-blink var(--wp-blink-period, 5s) steps(1, end) infinite; }
+.wp-spout-part { animation: wp-spout 2.4s ease-out infinite; opacity: var(--wp-spout, 0); }
+
+@keyframes wp-bob { 0%, 100% { transform: translateY(calc(var(--wp-bob, 3px) * -1)); } 50% { transform: translateY(var(--wp-bob, 3px)); } }
+@keyframes wp-tail { 0%, 100% { transform: rotate(calc(var(--wp-tail-angle, 6deg) * -1)); } 50% { transform: rotate(var(--wp-tail-angle, 6deg)); } }
+@keyframes wp-fin { 0%, 100% { transform: rotate(6deg); } 50% { transform: rotate(-10deg); } }
+@keyframes wp-blink { 0%, 92% { transform: scaleY(1); } 96%, 100% { transform: scaleY(0.08); } }
+@keyframes wp-spout { 0% { opacity: var(--wp-spout, 0); transform: translateY(4px) scale(0.9); } 40% { opacity: var(--wp-spout, 0); } 100% { opacity: 0; transform: translateY(-8px) scale(1.1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-bob, .wp-tail-part, .wp-fin-part, .wp-eye, .wp-spout-part { animation: none; }
+  .wp-spout-part { opacity: 0; }
+}
+
+</style>
+<h1>小蓝鲸 — 六态预览</h1>
+<p class="note">同一份 whale-art.js，桌面窗与 Web GUI 组件共用。此页仅用于肉眼校验造型与动效。</p>
+<div class="grid">
+    <figure class="card" data-state="idle">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:6deg;--wp-tail-period:3.4s;--wp-bob:3px;--wp-bob-period:3s;--wp-blink-period:5s;--wp-spout:0" role="img" aria-label="idle">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>idle</b>
+        <span>空闲</span>
+        
+      </figcaption>
+    </figure>
+    <figure class="card" data-state="busy">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:16deg;--wp-tail-period:1.1s;--wp-bob:5px;--wp-bob-period:1.2s;--wp-blink-period:2.6s;--wp-spout:0.35" role="img" aria-label="busy">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>busy</b>
+        <span>干活中</span>
+        <em>干活中…</em>
+      </figcaption>
+    </figure>
+    <figure class="card" data-state="waiting">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:9deg;--wp-tail-period:2.2s;--wp-bob:4px;--wp-bob-period:1.8s;--wp-blink-period:3.4s;--wp-spout:0.15" role="img" aria-label="waiting">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>waiting</b>
+        <span>等你回话</span>
+        <em>等你回话</em>
+      </figcaption>
+    </figure>
+    <figure class="card" data-state="done">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:13deg;--wp-tail-period:1.6s;--wp-bob:9px;--wp-bob-period:0.9s;--wp-blink-period:3s;--wp-spout:0.7" role="img" aria-label="done">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>done</b>
+        <span>干完了</span>
+        <em>干完啦</em>
+      </figcaption>
+    </figure>
+    <figure class="card" data-state="dragged">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:20deg;--wp-tail-period:0.9s;--wp-bob:2px;--wp-bob-period:0.7s;--wp-blink-period:1.6s;--wp-spout:0" role="img" aria-label="dragged">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>dragged</b>
+        <span>被拖拽</span>
+        <em>哇——</em>
+      </figcaption>
+    </figure>
+    <figure class="card" data-state="subagent">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:12deg;--wp-tail-period:1.4s;--wp-bob:4px;--wp-bob-period:1.4s;--wp-blink-period:2.8s;--wp-spout:0.2" role="img" aria-label="subagent">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>subagent</b>
+        <span>派了小助手</span>
+        <em>派了个小助手</em>
+      </figcaption>
+    </figure>
+    <figure class="card" data-state="unknown">
+      <svg class="wp-whale" viewBox="0 0 200 140" width="200" height="140" style="--wp-tail-angle:6deg;--wp-tail-period:3.4s;--wp-bob:3px;--wp-bob-period:3s;--wp-blink-period:5s;--wp-spout:0" role="img" aria-label="unknown">
+        <defs>
+<linearGradient id="preview-body" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6d8bf7"/>
+<stop offset="1" stop-color="#2b46c8"/>
+</linearGradient>
+<linearGradient id="preview-belly" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#f3f7ff"/>
+<stop offset="1" stop-color="#f3f7ff" stop-opacity="0.7"/>
+</linearGradient>
+</defs>
+<g class="wp-bob">
+<path class="wp-tail-part" d="M138 72 C158 58 176 40 188 26 C186 50 184 64 182 78 C184 92 186 106 188 128 C176 114 158 96 138 84 Z" fill="url(#preview-body)"/>
+<path d="M28 84 C26 54 62 36 100 36 C136 36 152 54 152 74 C152 94 134 104 100 106 C64 108 30 106 28 84 Z" fill="url(#preview-body)"/>
+<path d="M70 92 C80 108 96 112 114 110 C130 108 140 100 144 90 C132 102 112 106 94 104 C80 102 74 98 70 92 Z" fill="url(#preview-belly)" opacity="0.95"/>
+<path class="wp-fin-part" d="" fill="#2b46c8"/>
+<ellipse cx="94" cy="32" rx="3.5" ry="1.8" fill="#2b46c8" opacity="0.75"/>
+<circle class="wp-spout-part" cx="98" cy="12" r="3" fill="#f3f7ff"/>
+<ellipse cx="80" cy="84" rx="7" ry="4" fill="#ff9db3" opacity="0.5"/>
+<path d="M80 90 C84 95 92 95 96 90" stroke="#101a3a" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.75"/>
+<ellipse class="wp-eye" cx="68" cy="64" rx="6.5" ry="7.5" fill="#101a3a"/>
+<circle cx="69.5" cy="61.5" r="1.6" fill="#ffffff"/>
+<ellipse class="wp-eye" cx="96" cy="63" rx="6" ry="7" fill="#101a3a"/>
+<circle cx="97.5" cy="60.5" r="1.5" fill="#ffffff"/>
+</g>
+      </svg>
+      <figcaption>
+        <b>unknown</b>
+        <span>联系不上</span>
+        
+      </figcaption>
+    </figure>
+</div>
+</html>
