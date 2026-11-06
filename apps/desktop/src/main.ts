@@ -1091,11 +1091,15 @@ async function main(): Promise<void> {
   }
   refreshApplicationMenu()
   const trayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(process.resourcesPath, 'tray.ico')
+  // The companion's fast path back to this window: it asks through the Harness
+  // home instead of relaunching the application to hit the single-instance lock.
+  const petControl = new PetControl()
+  const stopPetReveal = petControl.watchReveal(() => { focusPrimaryWindow() })
   if (process.platform === 'win32') {
     // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,
-        open: () => { focusPrimaryWindow() }, quit: () => { app.quit() }, pet: new PetControl() })
+        open: () => { focusPrimaryWindow() }, quit: () => { app.quit() }, pet: petControl })
     } catch (error) { console.warn('desktop tray: unavailable', error) }
   }
   const backgroundNotice = process.platform === 'win32'
@@ -1353,6 +1357,7 @@ async function main(): Promise<void> {
     quitConfirmation.dispose()
     backgroundNotice?.dispose()
     tray?.dispose()
+    stopPetReveal()
     stopAccount?.()
     if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.hide()
     if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.hide()
@@ -1376,6 +1381,7 @@ async function main(): Promise<void> {
       backgroundNotice?.dispose()
       updateJournal?.action('quit-requested')
       tray?.dispose()
+      stopPetReveal()
       updateDialog.dispose()
       mandatoryUI?.dispose()
       // Installation preparation already awaited Platform storage cleanup.
