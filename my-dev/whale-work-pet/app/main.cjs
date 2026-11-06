@@ -12,9 +12,9 @@
  * is how the window is verified without a human looking at the desktop.
  */
 
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen } = require('electron')
 const { spawn } = require('node:child_process')
-const { readFile, writeFile } = require('node:fs/promises')
+const { appendFile, readFile, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 const { pathToFileURL } = require('node:url')
 
@@ -52,6 +52,24 @@ const APP_PATH = (() => {
 const WINDOW_WIDTH = SIZE + 60
 const WINDOW_HEIGHT = SIZE + 210
 
+/** Append-only trace of window-side actions; empty disables it. */
+const LOG = process.env.WHALE_PET_LOG ?? ''
+
+/**
+ * Append one diagnostic line.
+ * @param {string} message - what happened.
+ * @returns {void}
+ */
+function log(message) {
+  if (LOG.length === 0) return
+  appendFile(LOG, `${new Date().toISOString()} ${message}\n`).catch(() => {})
+}
+
+// Keep the trace to the current window generation, so it cannot grow forever.
+if (LOG.length > 0) {
+  writeFile(LOG, '').then(() => log(`start pid=${process.pid} parent=${PARENT_PID} app=${APP_PATH || '(raise)'}`)).catch(() => {})
+}
+
 /** Poll cadence for the live snapshot the host half publishes. */
 const TICK_MS = 200
 
@@ -76,50 +94,119 @@ function showWindow() {
   if (win === null || win.isDestroyed()) return
   win.show()
   if (ALWAYS_ON_TOP) win.setAlwaysOnTop(true, 'floating')
+  log('show')
 }
 
 /** Hide the window; the tray icon is the way back. */
 function hideWindow() {
   if (win === null || win.isDestroyed()) return
   win.hide()
+  log('hide')
 }
+
+/** Whether the pet is currently on screen. */
+const windowVisible = () => win !== null && !win.isDestroyed() && win.isVisible()
+
+/**
+ * The PowerShell that raises the Harness window.
+ *
+ * Neither `WScript.Shell.AppActivate` nor a bare `SetForegroundWindow` works
+ * from a background process: Windows' foreground lock swallows both and reports
+ * success. Attaching to the foreground thread's input queue releases the lock,
+ * and `SwitchToThisWindow` covers the case where it still refuses.
+ *
+ * The window is found by walking up the process ancestry for the first ancestor
+ * that owns a visible window — a source launch reports a bare runtime, so the
+ * executable path cannot be used.
+ */
+const RAISE_SCRIPT = String.raw`
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class Raise {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr h, bool alt);
+}
+"@
+$id = __WHALE_PARENT__
+$hwnd = [IntPtr]::Zero
+while ($id -gt 0) {
+  $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+  if ($p -and $p.MainWindowHandle -ne 0) { $hwnd = $p.MainWindowHandle; break }
+  $id = (Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue).ParentProcessId
+}
+if ($hwnd -eq [IntPtr]::Zero) { Write-Output "no-window"; exit 1 }
+$fgPid = 0
+$fgThread = [Raise]::GetWindowThreadProcessId([Raise]::GetForegroundWindow(), [ref]$fgPid)
+$me = [Raise]::GetCurrentThreadId()
+[void][Raise]::AttachThreadInput($me, $fgThread, $true)
+if ([Raise]::IsIconic($hwnd)) { [void][Raise]::ShowWindow($hwnd, 9) }
+[void][Raise]::BringWindowToTop($hwnd)
+$set = [Raise]::SetForegroundWindow($hwnd)
+[void][Raise]::SetActiveWindow($hwnd)
+[void][Raise]::AttachThreadInput($me, $fgThread, $false)
+if ([Raise]::GetForegroundWindow() -ne $hwnd) { [Raise]::SwitchToThisWindow($hwnd, $true) }
+Start-Sleep -Milliseconds 150
+$front = [Raise]::GetForegroundWindow().ToInt64()
+Write-Output "raise set=$set foreground=$front target=$($hwnd.ToInt64())"
+`
 
 /**
  * Bring the DeepSeek Harness desktop window to the front.
  *
  * The pet only exists while the Harness runs, so "open" almost always means
  * "raise". A packaged host reports its own executable, which is launched first
- * (its single-instance lock focuses the existing window). A source launch
- * reports a bare runtime, so the fallback walks the process ancestry for the
- * first ancestor that owns a visible window and activates it.
+ * (its single-instance lock focuses the existing window); everything else walks
+ * the process ancestry and raises the window directly.
  * @returns {void}
  */
 function openApp() {
   if (APP_PATH.length > 0) {
     try {
       spawn(APP_PATH, [], { detached: true, stdio: 'ignore' }).unref()
+      log(`open-app: launched ${APP_PATH}`)
       return
     } catch {
       // A moved or uninstalled app falls through to the ancestry walk.
     }
   }
-  if (process.platform !== 'win32' || PARENT_PID <= 0) return
-  const script = [
-    `$id = ${PARENT_PID}`,
-    'while ($id -gt 0) {',
-    '  $p = Get-Process -Id $id -ErrorAction SilentlyContinue',
-    '  if ($p -and $p.MainWindowHandle -ne 0) {',
-    '    $shell = New-Object -ComObject WScript.Shell',
-    '    [void]$shell.AppActivate($id)',
-    '    break',
-    '  }',
-    '  $id = (Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue).ParentProcessId',
-    '}',
-  ].join(' ')
-  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script], {
-    stdio: 'ignore',
+  if (process.platform !== 'win32' || PARENT_PID <= 0) {
+    log('open-app: no path and no ancestry walk available')
+    return
+  }
+  const script = RAISE_SCRIPT.replace('__WHALE_PARENT__', String(PARENT_PID))
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
+  child.stdout?.on('data', chunk => log(`open-app: ${String(chunk).trim()}`))
+  child.stderr?.on('data', chunk => log(`open-app stderr: ${String(chunk).trim()}`))
+  child.on('error', error => log(`open-app failed: ${error.message}`))
+  child.on('exit', code => log(`open-app powershell exit ${code}`))
+}
+
+/**
+ * Build the show/hide menu. The two states are exclusive: whichever is true now
+ * is the only one offered, so the list never says both.
+ * @returns {object} a menu template.
+ */
+function toggleTemplate() {
+  const visible = windowVisible()
+  return [
+    { label: visible ? '隐藏小宠物' : '显示小宠物', click: visible ? hideWindow : showWindow },
+    { type: 'separator' },
+    { label: '打开 DeepSeek Harness', click: openApp },
+    { type: 'separator' },
+    { label: '退出', click: () => app.quit() },
+  ]
 }
 
 /**
@@ -127,18 +214,25 @@ function openApp() {
  * @returns {void}
  */
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(join(HERE, 'tray.png')))
+  try {
+    tray = new Tray(nativeImage.createFromPath(join(HERE, 'tray.png')))
+  } catch (error) {
+    log(`tray failed: ${error.message}`)
+    return
+  }
   tray.setToolTip('鲸鱼娘工作台')
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示', click: showWindow },
-    { label: '隐藏', click: hideWindow },
-    { type: 'separator' },
-    { label: '退出', click: () => app.quit() },
-  ]))
+  tray.setContextMenu(Menu.buildFromTemplate(toggleTemplate()))
   tray.on('click', () => {
-    if (win !== null && win.isVisible()) hideWindow()
+    if (windowVisible()) hideWindow()
     else showWindow()
   })
+  log('tray created')
+}
+
+/** Rebuild the tray menu so it reflects the current visibility. */
+function refreshTray() {
+  if (tray === null) return
+  tray.setContextMenu(Menu.buildFromTemplate(toggleTemplate()))
 }
 
 /**
@@ -260,7 +354,13 @@ function createWindow() {
   win.once('ready-to-show', () => {
     // A hidden window produces no frames, so even the snapshot path shows it.
     win.showInactive()
+    log('window shown')
   })
+
+  // The tray menu offers only the action that applies, so it is rebuilt on
+  // every visibility change.
+  win.on('show', refreshTray)
+  win.on('hide', refreshTray)
 
   win.on('closed', () => {
     win = null
@@ -326,20 +426,22 @@ ipcMain.on('whale:open-app', () => {
 
 ipcMain.on('whale:menu', () => {
   if (win === null) return
-  Menu.buildFromTemplate([
-    { label: '显示', click: showWindow },
-    { label: '隐藏', click: hideWindow },
-    { type: 'separator' },
-    { label: '打开 DeepSeek Harness', click: openApp, enabled: APP_PATH.length > 0 || process.platform === 'win32' },
-    { type: 'separator' },
-    { label: '退出', click: () => app.quit() },
-  ]).popup({ window: win })
+  log('context menu')
+  Menu.buildFromTemplate(toggleTemplate()).popup({ window: win })
 })
 
 app.whenReady().then(async () => {
   createWindow()
   // The snapshot path is a one-shot capture; a tray icon would outlive it.
-  if (SNAPSHOT === undefined) createTray()
+  if (SNAPSHOT === undefined) {
+    createTray()
+    // A shortcut that does not depend on finding the tray icon in the overflow.
+    const ok = globalShortcut.register('Control+Alt+P', () => {
+      if (windowVisible()) hideWindow()
+      else showWindow()
+    })
+    log(`hotkey Control+Alt+P registered=${ok}`)
+  }
   await pushState()
   timer = setInterval(() => { void pushState() }, TICK_MS)
 
@@ -358,6 +460,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {
   if (timer !== null) clearInterval(timer)
+  globalShortcut.unregisterAll()
   if (tray !== null) {
     tray.destroy()
     tray = null

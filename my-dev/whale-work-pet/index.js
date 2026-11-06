@@ -621,7 +621,7 @@ export function apply(ctx, config) {
 
   ctx.logger?.info?.('whale-work-pet: serving %s and %s from %s', STATE_ROUTE, ASSET_ROUTE, sessionsDir)
 
-  if (config?.launch !== false) launchWindow(ctx, config)
+  if (config?.launch !== false) launchWindow(ctx, config, dshHome)
 }
 
 /**
@@ -667,7 +667,7 @@ function resolveElectron(config) {
  * @param {object} [config] - the row's config object.
  * @returns {void}
  */
-function launchWindow(ctx, config) {
+function launchWindow(ctx, config, dshHome) {
   const electron = resolveElectron(config)
   if (electron === null) {
     ctx.logger?.warn?.('whale-work-pet: no Electron binary found; set config.electronPath to open the desktop window')
@@ -690,6 +690,8 @@ function launchWindow(ctx, config) {
       // that is the app itself; a source launch reports a bare node/electron
       // binary, which the window ignores rather than launching something useless.
       WHALE_PET_APP: process.execPath,
+      // Window-side trace: menu clicks, show/hide, and the raise attempt.
+      WHALE_PET_LOG: join(dshHome, 'whale-work-pet.window.log'),
     }
     // Both flags turn Electron into a plain Node process; inherited from a
     // launcher they would leave a windowless child that silently exits.
