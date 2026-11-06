@@ -252,10 +252,25 @@ function toggleTemplate() {
   return [
     { label: visible ? '隐藏小宠物' : '显示小宠物', click: visible ? hideWindow : showWindow },
     { type: 'separator' },
+    { label: '喂小鱼干', click: () => playClip('snack.webm') },
+    { label: '摸摸头', click: () => playClip('react-happy.webm') },
+    { label: '让她打扫', click: () => playClip('cleaning.webm') },
+    { type: 'separator' },
     { label: '打开 DeepSeek Harness', click: openApp },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]
+}
+
+/**
+ * Play one animation because a menu entry asked for it.
+ * @param {string} clip - the asset file name to show.
+ * @returns {void}
+ */
+function playClip(clip) {
+  if (win === null || win.isDestroyed()) return
+  win.webContents.send('whale:play', clip)
+  log(`menu play ${clip}`)
 }
 
 /**

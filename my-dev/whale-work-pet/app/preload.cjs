@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('pet', {
   onState(listener) {
     ipcRenderer.on('whale:state', (_event, state) => listener(state))
   },
+  /** @param {(clip: string) => void} listener - called when the menu plays one clip. */
+  onPlay(listener) {
+    ipcRenderer.on('whale:play', (_event, clip) => listener(clip))
+  },
   /** Remember the window position at the start of a drag. */
   dragStart() {
     ipcRenderer.send('whale:drag-start')

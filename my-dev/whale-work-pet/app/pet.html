@@ -120,22 +120,46 @@
   const IDLE_NAP_MS = 3 * 60 * 1000
   /** A turn this long earns an occasional look at the clock. */
   const LONG_TASK_MS = 10 * 60 * 1000
-  /** One-shot reaction to a click. */
-  const REACTION_MS = 2200
+
+  /** Click reactions, cycled so the same one never repeats back to back. */
+  const REACTIONS = [
+    { clip: 'react-shy.webm', ms: 2400 },
+    { clip: 'react-pout.webm', ms: 2600 },
+    { clip: 'react-happy.webm', ms: 2400 },
+    { clip: 'startled.webm', ms: 2000 },
+  ]
+  /** Little things she does while nothing is happening. */
+  const IDLE_ACTIONS = [
+    { clip: 'look-around.webm', ms: 5200 },
+    { clip: 'hum.webm', ms: 6400 },
+    { clip: 'game.webm', ms: 7000 },
+    { clip: 'rubik.webm', ms: 6400 },
+    { clip: 'milk-tea.webm', ms: 5200 },
+    { clip: 'snack-caught.webm', ms: 5200 },
+    { clip: 'cleaning.webm', ms: 6400 },
+  ]
+  /** The nap runs as a three-part sequence once the idle stretches out. */
+  const NAP = ['sleep-1.webm', 'sleep-2.webm', 'sleep-3.webm']
 
   let phase = 'unknown'
   let phaseSince = Date.now()
   let clipIndex = 0
   let front = 0
   let sources = ['idle.webm', null]
-  let reaction = null
+  /** A clip that owns the screen for a while: `{ clip, token }`. */
+  let oneShot = null
+  let reactionIndex = 0
+  let nextIdleActionAt = 0
 
   const t = key => COPY[key] ?? key
 
   function wantedClip() {
-    if (reaction !== null) return reaction
+    if (oneShot !== null) return oneShot.clip
     if (phase === 'waiting' && clipIndex > 0) return 'startled.webm'
-    if (phase === 'idle' && Date.now() - phaseSince > IDLE_NAP_MS) return 'sleep.webm'
+    if (phase === 'idle') {
+      if (Date.now() - phaseSince > IDLE_NAP_MS) return NAP[clipIndex % NAP.length]
+      return 'idle.webm'
+    }
     if (phase === 'working' && Date.now() - phaseSince > LONG_TASK_MS && clipIndex % 4 === 3) return 'waiting.webm'
     const clips = CLIPS[phase] ?? CLIPS.unknown
     return clips[clipIndex % clips.length]
@@ -154,11 +178,32 @@
     front = back
   }
 
+  /**
+   * Put one clip on screen for a while, then hand the stage back to the phase.
+   * @param {string} clip - the animation file to play.
+   * @param {number} ms - how long it owns the screen.
+   * @returns {void}
+   */
+  function playOnce(clip, ms) {
+    const token = {}
+    oneShot = { clip, token }
+    applyClip()
+    window.setTimeout(() => {
+      if (oneShot !== null && oneShot.token === token) {
+        oneShot = null
+        applyClip()
+      }
+    }, ms)
+  }
+
   function setPhase(next) {
     if (next === phase) return
     phase = next
     phaseSince = Date.now()
     clipIndex = 0
+    // A new phase cancels whatever she was doing; the phase owns the face again.
+    oneShot = null
+    nextIdleActionAt = Date.now() + 30000
     root.dataset.phase = phase
     label.textContent = t('phase.' + phase)
     applyClip()
@@ -168,9 +213,22 @@
     setPhase(next?.phase ?? 'unknown')
   })
 
-  // Rotate the working clips, escalate a long wait, and let the idle nap start.
+  // A manual action from the tray or the right-click menu.
+  window.pet.onPlay(clip => {
+    playOnce(clip, 6400)
+  })
+
+  // Rotate the working clips, escalate a long wait, let the nap start, and give
+  // an idle pet something to do now and then.
   setInterval(() => {
     const clips = CLIPS[phase] ?? CLIPS.unknown
+    if (oneShot !== null) return
+    if (phase === 'idle' && Date.now() > nextIdleActionAt && Date.now() - phaseSince < IDLE_NAP_MS) {
+      const action = IDLE_ACTIONS[Math.floor(Math.random() * IDLE_ACTIONS.length)]
+      nextIdleActionAt = Date.now() + 60000 + Math.random() * 90000
+      playOnce(action.clip, action.ms)
+      return
+    }
     if (phase === 'working' && clips.length > 1) {
       clipIndex += 1
       applyClip()
@@ -214,18 +272,13 @@
       dragged = false
       return
     }
-    reaction = 'startled.webm'
-    applyClip()
-    window.setTimeout(() => {
-      if (reaction === 'startled.webm') {
-        reaction = null
-        applyClip()
-      }
-    }, REACTION_MS)
+    const reaction = REACTIONS[reactionIndex % REACTIONS.length]
+    reactionIndex += 1
+    playOnce(reaction.clip, reaction.ms)
   })
   stage.addEventListener('dblclick', () => {
     // The second click of a double click already started a reaction; drop it.
-    reaction = null
+    oneShot = null
     applyClip()
     window.pet.openApp()
   })
