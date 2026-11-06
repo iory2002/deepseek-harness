@@ -157,16 +157,23 @@ async function pollCommand() {
 }
 
 /**
- * The PowerShell that raises the Harness window.
+ * The PowerShell that brings the Harness desktop forward.
  *
- * Neither `WScript.Shell.AppActivate` nor a bare `SetForegroundWindow` works
- * from a background process: Windows' foreground lock swallows both and reports
- * success. Attaching to the foreground thread's input queue releases the lock,
- * and `SwitchToThisWindow` covers the case where it still refuses.
+ * Two cases, because "closed" and "behind another window" need different moves:
  *
- * The window is found by walking up the process ancestry for the first ancestor
- * that owns a visible window — a source launch reports a bare runtime, so the
- * executable path cannot be used.
+ * - A window still exists: raise it. Neither `WScript.Shell.AppActivate` nor a
+ *   bare `SetForegroundWindow` works from a background process — Windows'
+ *   foreground lock swallows both and reports success — so the script attaches to
+ *   the foreground thread's input queue and falls back to `SwitchToThisWindow`.
+ * - No window exists (the user closed it to the tray): relaunch the application
+ *   with the command line of the process that owns it. Its single-instance lock
+ *   routes the launch to the running instance, which recreates and shows the
+ *   window. Inspector and debugging flags are dropped so the new process cannot
+ *   fight over those ports.
+ *
+ * The owning process is identified by `--user-data-dir`, not by executable path:
+ * a source launch runs a bare `electron` with the application directory as an
+ * argument, and the host process in this tree has its own command line.
  */
 const RAISE_SCRIPT = String.raw`
 Add-Type -TypeDefinition @"
@@ -183,29 +190,66 @@ public class Raise {
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
   [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
   [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr h, bool alt);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
 }
 "@
 $id = __WHALE_PARENT__
 $hwnd = [IntPtr]::Zero
+$appExe = ''
+$appCommand = ''
 while ($id -gt 0) {
-  $p = Get-Process -Id $id -ErrorAction SilentlyContinue
-  if ($p -and $p.MainWindowHandle -ne 0) { $hwnd = $p.MainWindowHandle; break }
-  $id = (Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue).ParentProcessId
+  $process = Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue
+  if (-not $process) { break }
+  if ($hwnd -eq [IntPtr]::Zero) {
+    $running = Get-Process -Id $id -ErrorAction SilentlyContinue
+    # A closed-to-tray window keeps its handle but loses its title and visibility;
+    # raising that handle does nothing, so only a titled, visible window counts.
+    if ($running -and $running.MainWindowHandle -ne 0 -and $running.MainWindowTitle -ne '' -and [Raise]::IsWindowVisible($running.MainWindowHandle)) {
+      $hwnd = $running.MainWindowHandle
+    }
+  }
+  if ($appExe -eq '' -and $process.CommandLine -like '*--user-data-dir*') {
+    $appExe = $process.ExecutablePath
+    $appCommand = $process.CommandLine
+  }
+  $id = $process.ParentProcessId
 }
-if ($hwnd -eq [IntPtr]::Zero) { Write-Output "no-window"; exit 1 }
-$fgPid = 0
-$fgThread = [Raise]::GetWindowThreadProcessId([Raise]::GetForegroundWindow(), [ref]$fgPid)
-$me = [Raise]::GetCurrentThreadId()
-[void][Raise]::AttachThreadInput($me, $fgThread, $true)
-if ([Raise]::IsIconic($hwnd)) { [void][Raise]::ShowWindow($hwnd, 9) }
-[void][Raise]::BringWindowToTop($hwnd)
-$set = [Raise]::SetForegroundWindow($hwnd)
-[void][Raise]::SetActiveWindow($hwnd)
-[void][Raise]::AttachThreadInput($me, $fgThread, $false)
-if ([Raise]::GetForegroundWindow() -ne $hwnd) { [Raise]::SwitchToThisWindow($hwnd, $true) }
-Start-Sleep -Milliseconds 150
-$front = [Raise]::GetForegroundWindow().ToInt64()
-Write-Output "raise set=$set foreground=$front target=$($hwnd.ToInt64())"
+
+if ($hwnd -ne [IntPtr]::Zero) {
+  $fgPid = 0
+  $fgThread = [Raise]::GetWindowThreadProcessId([Raise]::GetForegroundWindow(), [ref]$fgPid)
+  $me = [Raise]::GetCurrentThreadId()
+  [void][Raise]::AttachThreadInput($me, $fgThread, $true)
+  if ([Raise]::IsIconic($hwnd)) { [void][Raise]::ShowWindow($hwnd, 9) }
+  [void][Raise]::BringWindowToTop($hwnd)
+  $set = [Raise]::SetForegroundWindow($hwnd)
+  [void][Raise]::SetActiveWindow($hwnd)
+  [void][Raise]::AttachThreadInput($me, $fgThread, $false)
+  if ([Raise]::GetForegroundWindow() -ne $hwnd) { [Raise]::SwitchToThisWindow($hwnd, $true) }
+  Start-Sleep -Milliseconds 150
+  Write-Output "raise set=$set foreground=$([Raise]::GetForegroundWindow().ToInt64()) target=$($hwnd.ToInt64())"
+  exit 0
+}
+
+if ($appExe -ne '' -and $appCommand -ne '') {
+  $offset = $appCommand.IndexOf($appExe)
+  $rest = if ($offset -ge 0) { $appCommand.Substring($offset + $appExe.Length).Trim() } else { '' }
+  $parts = @($rest -split '\s+' | Where-Object { $_ -ne '' -and $_ -notlike '--inspect*' -and $_ -notlike '--remote-debugging-port*' })
+  $workdir = $null
+  if ($parts.Count -gt 0 -and (Test-Path -LiteralPath $parts[-1] -PathType Container)) { $workdir = $parts[-1] }
+  $start = @{ FilePath = $appExe; ArgumentList = $parts }
+  if ($workdir) { $start.WorkingDirectory = $workdir }
+  # These turn the child into a plain Node process, which would exit without
+  # ever asking the running instance to show its window.
+  Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+  Remove-Item Env:ELECTRON_NO_ATTACH_CONSOLE -ErrorAction SilentlyContinue
+  Start-Process @start -ErrorAction Stop | Out-Null
+  Write-Output "relaunch $appExe $($parts -join ' ')"
+  exit 0
+}
+
+Write-Output 'no-window'
+exit 1
 `
 
 /**
