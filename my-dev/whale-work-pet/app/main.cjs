@@ -90,6 +90,8 @@ const LIVE_FILE = 'whale-work-pet.live.json'
 const HOME = process.env.WHALE_PET_HOME ?? ''
 const VISIBLE_FILE = HOME.length > 0 ? join(HOME, 'whale-work-pet.visible.json') : ''
 const COMMAND_FILE = HOME.length > 0 ? join(HOME, 'whale-work-pet.command.json') : ''
+const OPEN_FILE = HOME.length > 0 ? join(HOME, 'whale-work-pet.open.json') : ''
+const OPEN_ACK_FILE = HOME.length > 0 ? join(HOME, 'whale-work-pet.open-ack.json') : ''
 
 /** Commands written before this window existed are ignored. */
 let lastCommandAt = Date.now()
@@ -275,6 +277,50 @@ function openApp() {
     log('open-app: no path and no ancestry walk available')
     return
   }
+  // Fast path: the running shell answers a file request in about a frame.
+  void askShellToReveal().then((answered) => {
+    if (answered) return
+    log('open-app: no acknowledgement, falling back to relaunch')
+    relaunchShell()
+  })
+}
+
+/**
+ * Ask the running shell to show its window through the Harness home.
+ *
+ * Relaunching the application so its single-instance lock forwards costs about
+ * two seconds of Electron startup; this costs one file write and a poll.
+ * @returns {Promise<boolean>} true when the shell acknowledged the request.
+ */
+async function askShellToReveal() {
+  if (OPEN_FILE.length === 0 || OPEN_ACK_FILE.length === 0) return false
+  const at = Date.now()
+  try {
+    await writeFile(OPEN_FILE, JSON.stringify({ at }))
+  } catch {
+    return false
+  }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 60))
+    try {
+      const ack = JSON.parse(await readFile(OPEN_ACK_FILE, 'utf8'))
+      if (typeof ack?.at === 'number' && ack.at >= at) {
+        log('open-app: reveal acknowledged')
+        return true
+      }
+    } catch {
+      // No acknowledgement yet; keep waiting for the rest of the budget.
+    }
+  }
+  return false
+}
+
+/**
+ * Fall back to launching the application again and letting its single-instance
+ * lock route the launch to the running instance.
+ * @returns {void}
+ */
+function relaunchShell() {
   const script = RAISE_SCRIPT.replace('__WHALE_PARENT__', String(PARENT_PID))
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script], {
     stdio: ['ignore', 'pipe', 'pipe'],

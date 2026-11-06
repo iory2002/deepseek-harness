@@ -21,13 +21,16 @@
   喝奶茶、偷吃被抓、女仆扫除。
 - **右键菜单里的动作**：喂小鱼干（吃小鱼干）、摸摸头（开心跃动）、让她打扫（女仆扫除）。
 - **状态胶囊**：她头顶一枚胶囊写着当前相态。没有展开的统计卡——要数字就看 Web 界面。
-- **双击**：把 DeepSeek Harness 的窗口调到前台。分两种情况：
-  - **窗口还在**（只是被别的窗口盖住）：沿进程祖先链找到持有可见窗口的进程，用
-    `AttachThreadInput` + `SetForegroundWindow` 提窗（`AppActivate` 和裸的 `SetForegroundWindow`
-    在后台进程里都会被前台锁吞掉，只是返回 True）。
-  - **窗口被关到托盘了**：这时没有可见窗口可提，改成用宿主应用自己的命令行再启动一次——
-    单实例锁会把这次启动转给正在运行的实例，由它 `show()` 出窗口。启动前会摘掉
-    `--inspect` / `--remote-debugging-port` 参数，避免抢端口。
+- **双击**：把 DeepSeek Harness 的窗口调到前台，按代价从低到高三级回退：
+  1. **文件通道（约 200ms）**：写 `whale-work-pet.open.json`，桌面应用每 150ms 看一眼并回写
+     `whale-work-pet.open-ack.json`，收到 ack 就 `focusPrimaryWindow()`。窗口关到托盘时这是唯一
+     不重启就能叫回来的路。
+  2. **提窗（约 300ms）**：拿不到 ack 时，沿进程祖先链找到持有可见窗口的进程，用
+     `AttachThreadInput` + `SetForegroundWindow` 提窗（`AppActivate` 和裸的 `SetForegroundWindow`
+     在后台进程里都会被前台锁吞掉，只是返回 True）。
+  3. **重启应用（约 2s）**：没有可见窗口也没有 ack 时，用宿主应用自己的命令行再启动一次——
+     单实例锁会把这次启动转给运行中的实例，由它 `show()` 出窗口。启动前会摘掉
+     `--inspect` / `--remote-debugging-port`，并清掉 `ELECTRON_RUN_AS_NODE`。
 - **拖动**：按住她拖走；位置在窗口存活期间保持。
 - **右键**：在她或胶囊上右键 → 显示/隐藏小宠物（**互斥，只出现当下适用的那一条**）/
   打开 DeepSeek Harness / 退出。
