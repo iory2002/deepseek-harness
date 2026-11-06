@@ -12,7 +12,7 @@
  * is how the window is verified without a human looking at the desktop.
  */
 
-const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen } = require('electron')
 const { spawn } = require('node:child_process')
 const { appendFile, readFile, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
@@ -82,8 +82,19 @@ const LIVE_FRESH_MS = 2500
 /** The host half's live snapshot file, next to the rest of the Harness home. */
 const LIVE_FILE = 'whale-work-pet.live.json'
 
+/**
+ * File channel to the Harness desktop tray, which cannot talk to this process
+ * directly. The pet publishes its visibility and polls for a requested action;
+ * `<HOME>` arrives from the host half so both sides agree on one directory.
+ */
+const HOME = process.env.WHALE_PET_HOME ?? ''
+const VISIBLE_FILE = HOME.length > 0 ? join(HOME, 'whale-work-pet.visible.json') : ''
+const COMMAND_FILE = HOME.length > 0 ? join(HOME, 'whale-work-pet.command.json') : ''
+
+/** Commands written before this window existed are ignored. */
+let lastCommandAt = Date.now()
+
 let win = null
-let tray = null
 let dragOrigin = null
 let timer = null
 let foldAt = 0
@@ -95,17 +106,55 @@ function showWindow() {
   win.show()
   if (ALWAYS_ON_TOP) win.setAlwaysOnTop(true, 'floating')
   log('show')
+  publishVisibility()
 }
 
-/** Hide the window; the tray icon is the way back. */
+/** Hide the window; the hotkey or the right-click menu brings it back. */
 function hideWindow() {
   if (win === null || win.isDestroyed()) return
   win.hide()
   log('hide')
+  publishVisibility()
 }
 
 /** Whether the pet is currently on screen. */
 const windowVisible = () => win !== null && !win.isDestroyed() && win.isVisible()
+
+/**
+ * Publish the current visibility for the desktop tray. A heartbeat as well as an
+ * edge: a stale file tells the tray the pet is gone.
+ * @returns {void}
+ */
+function publishVisibility() {
+  if (VISIBLE_FILE.length === 0) return
+  writeFile(VISIBLE_FILE, JSON.stringify({ visible: windowVisible(), updatedAt: Date.now() })).catch(() => {})
+}
+
+/**
+ * Apply one requested action from the desktop tray, if it is newer than the last
+ * one seen. Everything else (bad JSON, a half-written file, an old request) is
+ * ignored rather than applied.
+ * @returns {Promise<void>} resolves once the check finishes.
+ */
+async function pollCommand() {
+  if (COMMAND_FILE.length === 0) return
+  let command
+  try {
+    command = JSON.parse(await readFile(COMMAND_FILE, 'utf8'))
+  } catch {
+    return
+  }
+  const at = typeof command?.at === 'number' ? command.at : 0
+  if (at <= lastCommandAt) return
+  lastCommandAt = at
+  if (command.action === 'show') showWindow()
+  else if (command.action === 'hide') hideWindow()
+  else if (command.action === 'toggle') {
+    if (windowVisible()) hideWindow()
+    else showWindow()
+  }
+  log(`command ${command.action}`)
+}
 
 /**
  * The PowerShell that raises the Harness window.
@@ -207,32 +256,6 @@ function toggleTemplate() {
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]
-}
-
-/**
- * Put an icon in the notification area, so a hidden window can always come back.
- * @returns {void}
- */
-function createTray() {
-  try {
-    tray = new Tray(nativeImage.createFromPath(join(HERE, 'tray.png')))
-  } catch (error) {
-    log(`tray failed: ${error.message}`)
-    return
-  }
-  tray.setToolTip('鲸鱼娘工作台')
-  tray.setContextMenu(Menu.buildFromTemplate(toggleTemplate()))
-  tray.on('click', () => {
-    if (windowVisible()) hideWindow()
-    else showWindow()
-  })
-  log('tray created')
-}
-
-/** Rebuild the tray menu so it reflects the current visibility. */
-function refreshTray() {
-  if (tray === null) return
-  tray.setContextMenu(Menu.buildFromTemplate(toggleTemplate()))
 }
 
 /**
@@ -357,11 +380,6 @@ function createWindow() {
     log('window shown')
   })
 
-  // The tray menu offers only the action that applies, so it is rebuilt on
-  // every visibility change.
-  win.on('show', refreshTray)
-  win.on('hide', refreshTray)
-
   win.on('closed', () => {
     win = null
     app.quit()
@@ -432,10 +450,9 @@ ipcMain.on('whale:menu', () => {
 
 app.whenReady().then(async () => {
   createWindow()
-  // The snapshot path is a one-shot capture; a tray icon would outlive it.
+  // The snapshot path is a one-shot capture; a hotkey would outlive it.
   if (SNAPSHOT === undefined) {
-    createTray()
-    // A shortcut that does not depend on finding the tray icon in the overflow.
+    // The way back to a hidden pet when its own menu is out of reach.
     const ok = globalShortcut.register('Control+Alt+P', () => {
       if (windowVisible()) hideWindow()
       else showWindow()
@@ -444,6 +461,12 @@ app.whenReady().then(async () => {
   }
   await pushState()
   timer = setInterval(() => { void pushState() }, TICK_MS)
+
+  if (SNAPSHOT === undefined) {
+    publishVisibility()
+    setInterval(publishVisibility, 2000)
+    setInterval(() => { void pollCommand() }, 400)
+  }
 
   if (SNAPSHOT !== undefined) {
     setTimeout(async () => {
@@ -461,10 +484,6 @@ app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {
   if (timer !== null) clearInterval(timer)
   globalShortcut.unregisterAll()
-  if (tray !== null) {
-    tray.destroy()
-    tray = null
-  }
 })
 
 // A crashed or killed Harness never runs its disposer, so the window watches the

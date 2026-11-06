@@ -692,6 +692,8 @@ function launchWindow(ctx, config, dshHome) {
       WHALE_PET_APP: process.execPath,
       // Window-side trace: menu clicks, show/hide, and the raise attempt.
       WHALE_PET_LOG: join(dshHome, 'whale-work-pet.window.log'),
+      // The tray bridge: the window publishes visibility here and reads commands.
+      WHALE_PET_HOME: dshHome,
     }
     // Both flags turn Electron into a plain Node process; inherited from a
     // launcher they would leave a windowless child that silently exits.
