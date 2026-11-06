@@ -130,7 +130,6 @@
     'phase.waiting': '等你确认',
     'phase.done': '干完了',
     'phase.offline': '宿主无响应',
-    'card.session': '会话',
     'card.step': '当前步骤',
     'card.steps': '累计步数',
     'card.elapsed': '已跑',
@@ -181,7 +180,6 @@
   function cardRows() {
     const detail = state?.detail ?? {}
     const rows = []
-    if (typeof detail.sessionId === 'string') rows.push([t('card.session'), detail.sessionId.slice(-8)])
     if (detail.openStep && typeof detail.openStep === 'object') {
       rows.push([t('card.step'), '#' + detail.openStep.turn + '/' + detail.openStep.step])
     }
@@ -272,8 +270,11 @@
     }
   }, 1500)
 
-  // Drag the whole window; a click without movement toggles the card.
+  // Drag the whole window; a single click toggles the card, a double click
+  // opens the desktop application, so the first click waits for the second.
+  const DOUBLE_CLICK_MS = 260
   let drag = null
+  let clickTimer = null
   stage.addEventListener('pointerdown', event => {
     if (event.button !== 0) return
     drag = { x: event.screenX, y: event.screenY, moved: false }
@@ -293,10 +294,18 @@
     const moved = drag.moved
     drag = null
     window.pet.dragEnd()
-    if (!moved) {
+    if (moved) return
+    if (clickTimer !== null) {
+      clearTimeout(clickTimer)
+      clickTimer = null
+      window.pet.openApp()
+      return
+    }
+    clickTimer = setTimeout(() => {
+      clickTimer = null
       open = !open
       renderCard()
-    }
+    }, DOUBLE_CLICK_MS)
   })
 
   document.getElementById('pill').addEventListener('click', () => {
@@ -304,10 +313,12 @@
     renderCard()
   })
 
-  document.getElementById('pill').addEventListener('contextmenu', event => {
-    event.preventDefault()
-    window.pet.menu()
-  })
+  for (const target of [stage, document.getElementById('pill'), card]) {
+    target.addEventListener('contextmenu', event => {
+      event.preventDefault()
+      window.pet.menu()
+    })
+  }
 
   // Click-through everywhere the artwork and card do not cover.
   window.addEventListener('mousemove', event => {

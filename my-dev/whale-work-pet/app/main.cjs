@@ -12,7 +12,8 @@
  * is how the window is verified without a human looking at the desktop.
  */
 
-const { app, BrowserWindow, Menu, ipcMain, screen } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron')
+const { spawn } = require('node:child_process')
 const { readFile, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 const { pathToFileURL } = require('node:url')
@@ -37,6 +38,16 @@ const SNAPSHOT = process.env.WHALE_PET_SNAPSHOT
 /** The Harness process that spawned this window; a hard crash there leaves no disposer. */
 const PARENT_PID = Number(process.env.WHALE_PET_PARENT_PID ?? 0)
 
+/** The desktop application a double-click opens; empty when the host could not name one. */
+const APP_PATH = (() => {
+  const candidate = process.env.WHALE_PET_APP ?? ''
+  if (candidate.length === 0) return ''
+  // A source launch reports the runtime binary, not the app; opening that would
+  // spawn a stray console window instead of the desktop client.
+  const base = candidate.slice(candidate.lastIndexOf('\\') + 1).slice(candidate.lastIndexOf('/') + 1).toLowerCase()
+  return base === 'node.exe' || base === 'electron.exe' || base === 'node' || base === 'electron' ? '' : candidate
+})()
+
 /** Card + pill + stage, so the card can open upward without resizing the window. */
 const WINDOW_WIDTH = SIZE + 60
 const WINDOW_HEIGHT = SIZE + 210
@@ -54,10 +65,81 @@ const LIVE_FRESH_MS = 2500
 const LIVE_FILE = 'whale-work-pet.live.json'
 
 let win = null
+let tray = null
 let dragOrigin = null
 let timer = null
 let foldAt = 0
 let stateDirectory = null
+
+/** Bring the window back after a hide, keeping it above other windows. */
+function showWindow() {
+  if (win === null || win.isDestroyed()) return
+  win.show()
+  if (ALWAYS_ON_TOP) win.setAlwaysOnTop(true, 'floating')
+}
+
+/** Hide the window; the tray icon is the way back. */
+function hideWindow() {
+  if (win === null || win.isDestroyed()) return
+  win.hide()
+}
+
+/**
+ * Bring the DeepSeek Harness desktop window to the front.
+ *
+ * The pet only exists while the Harness runs, so "open" almost always means
+ * "raise". A packaged host reports its own executable, which is launched first
+ * (its single-instance lock focuses the existing window). A source launch
+ * reports a bare runtime, so the fallback walks the process ancestry for the
+ * first ancestor that owns a visible window and activates it.
+ * @returns {void}
+ */
+function openApp() {
+  if (APP_PATH.length > 0) {
+    try {
+      spawn(APP_PATH, [], { detached: true, stdio: 'ignore' }).unref()
+      return
+    } catch {
+      // A moved or uninstalled app falls through to the ancestry walk.
+    }
+  }
+  if (process.platform !== 'win32' || PARENT_PID <= 0) return
+  const script = [
+    `$id = ${PARENT_PID}`,
+    'while ($id -gt 0) {',
+    '  $p = Get-Process -Id $id -ErrorAction SilentlyContinue',
+    '  if ($p -and $p.MainWindowHandle -ne 0) {',
+    '    $shell = New-Object -ComObject WScript.Shell',
+    '    [void]$shell.AppActivate($id)',
+    '    break',
+    '  }',
+    '  $id = (Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue).ParentProcessId',
+    '}',
+  ].join(' ')
+  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script], {
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+}
+
+/**
+ * Put an icon in the notification area, so a hidden window can always come back.
+ * @returns {void}
+ */
+function createTray() {
+  tray = new Tray(nativeImage.createFromPath(join(HERE, 'tray.png')))
+  tray.setToolTip('鲸鱼娘工作台')
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '显示', click: showWindow },
+    { label: '隐藏', click: hideWindow },
+    { type: 'separator' },
+    { label: '退出', click: () => app.quit() },
+  ]))
+  tray.on('click', () => {
+    if (win !== null && win.isVisible()) hideWindow()
+    else showWindow()
+  })
+}
 
 /**
  * Resolve the Electron binary to run this app with.
@@ -235,13 +317,20 @@ ipcMain.on('whale:ignore-mouse', (_event, ignore) => {
 })
 
 ipcMain.on('whale:hide', () => {
-  if (win !== null) win.hide()
+  hideWindow()
+})
+
+ipcMain.on('whale:open-app', () => {
+  openApp()
 })
 
 ipcMain.on('whale:menu', () => {
   if (win === null) return
   Menu.buildFromTemplate([
-    { label: '隐藏', click: () => win?.hide() },
+    { label: '显示', click: showWindow },
+    { label: '隐藏', click: hideWindow },
+    { type: 'separator' },
+    { label: '打开 DeepSeek Harness', click: openApp, enabled: APP_PATH.length > 0 || process.platform === 'win32' },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]).popup({ window: win })
@@ -249,6 +338,8 @@ ipcMain.on('whale:menu', () => {
 
 app.whenReady().then(async () => {
   createWindow()
+  // The snapshot path is a one-shot capture; a tray icon would outlive it.
+  if (SNAPSHOT === undefined) createTray()
   await pushState()
   timer = setInterval(() => { void pushState() }, TICK_MS)
 
@@ -267,6 +358,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {
   if (timer !== null) clearInterval(timer)
+  if (tray !== null) {
+    tray.destroy()
+    tray = null
+  }
 })
 
 // A crashed or killed Harness never runs its disposer, so the window watches the

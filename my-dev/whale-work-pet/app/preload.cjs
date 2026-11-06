@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('pet', {
   ignoreMouse(ignore) {
     ipcRenderer.send('whale:ignore-mouse', ignore)
   },
+  /** Open the DeepSeek Harness desktop application. */
+  openApp() {
+    ipcRenderer.send('whale:open-app')
+  },
   /** Hide the window until the next launch. */
   hide() {
     ipcRenderer.send('whale:hide')

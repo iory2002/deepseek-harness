@@ -686,6 +686,10 @@ function launchWindow(ctx, config) {
       WHALE_PET_OPTIONS: JSON.stringify(options),
       // The window leaves by itself if this process dies without a disposer.
       WHALE_PET_PARENT_PID: String(process.pid),
+      // A double-click on the pet opens this executable. For a desktop-app host
+      // that is the app itself; a source launch reports a bare node/electron
+      // binary, which the window ignores rather than launching something useless.
+      WHALE_PET_APP: process.execPath,
     }
     // Both flags turn Electron into a plain Node process; inherited from a
     // launcher they would leave a windowless child that silently exits.
