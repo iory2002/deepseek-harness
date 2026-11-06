@@ -1,0 +1,26 @@
+{
+  "name": "@local/dsh-whale-work-pet",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone always-on-top whale-girl window that shows what DeepSeek Harness is doing right now.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "app",
+    "cordis.patch.yml",
+    "assets/*.webm",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  }
+}

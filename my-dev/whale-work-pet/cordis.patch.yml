@@ -1,0 +1,13 @@
+# Mounts the whale-girl work status bundle.
+#
+# `dshHome` is intentionally omitted: the host half falls back to `$DSH_HOME`
+# and then `~/.dsh`, matching the Harness's own resolution order.
+#
+# Every other key is optional; see README.md for the table.
+#   debug: true   appends every delivered event and every snapshot write to
+#                 $DSH_HOME/whale-work-pet.events.log
+#   launch: false keeps the plugin's HTTP routes without opening the window
+- insert:
+    - id: whale-work-pet
+      name: '@local/dsh-whale-work-pet'
+      config: {}

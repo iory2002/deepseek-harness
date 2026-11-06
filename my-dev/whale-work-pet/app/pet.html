@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>鲸鱼娘工作台</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    /* The window is click-through except where the artwork and card opt in. */
+    pointer-events: none;
+  }
+  #root {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-bottom: 8px;
+    box-sizing: border-box;
+  }
+  #card {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 176px;
+    max-width: 236px;
+    margin-bottom: 4px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: rgba(22, 30, 44, .92);
+    color: #eef2f8;
+    box-shadow: 0 10px 28px rgba(4, 10, 22, .38);
+    backdrop-filter: blur(8px);
+    font-size: 11px;
+    line-height: 15px;
+  }
+  #card[hidden] { display: none; }
+  .row { display: flex; justify-content: space-between; gap: 10px; }
+  .k { color: #9aa7bd; }
+  .v {
+    font-variant-numeric: tabular-nums;
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+  }
+  #stage {
+    position: relative;
+    pointer-events: auto;
+    cursor: grab;
+    filter: drop-shadow(0 10px 20px rgba(4, 10, 22, .35));
+  }
+  #stage:active { cursor: grabbing; }
+  video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity .18s ease;
+    pointer-events: none;
+  }
+  video.front { opacity: 1; }
+  #pill {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: rgba(22, 30, 44, .92);
+    color: #eef2f8;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(4, 10, 22, .3);
+    backdrop-filter: blur(8px);
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #5b6b85;
+  }
+  #root[data-phase="working"] .dot { background: #4d7cff; }
+  #root[data-phase="waiting"] .dot { background: #e0a33c; }
+  #root[data-phase="done"] .dot { background: #39b57a; }
+  #root[data-phase="offline"] .dot { background: #df5d5d; }
+</style>
+</head>
+<body>
+  <div id="root" data-phase="unknown">
+    <div id="card" hidden></div>
+    <div id="stage">
+      <video id="a" muted loop autoplay playsinline preload="auto"></video>
+      <video id="b" muted loop autoplay playsinline preload="auto"></video>
+    </div>
+    <div id="pill"><span class="dot"></span><span id="label">正在连接宿主</span></div>
+  </div>
+<script>
+  const SIZE = Number(new URLSearchParams(location.search).get('size')) || 200
+  const stage = document.getElementById('stage')
+  const root = document.getElementById('root')
+  const card = document.getElementById('card')
+  const label = document.getElementById('label')
+  const videos = [document.getElementById('a'), document.getElementById('b')]
+
+  stage.style.width = SIZE + 'px'
+  stage.style.height = SIZE + 'px'
+
+  const COPY = {
+    'phase.unknown': '正在连接宿主',
+    'phase.idle': '空闲',
+    'phase.working': '工作中',
+    'phase.waiting': '等你确认',
+    'phase.done': '干完了',
+    'phase.offline': '宿主无响应',
+    'card.session': '会话',
+    'card.step': '当前步骤',
+    'card.steps': '累计步数',
+    'card.elapsed': '已跑',
+    'card.pending': '进行中的调用',
+    'card.questions': '待你回答',
+    'card.tool': '最近工具',
+    'card.context': '上下文',
+    'card.age': '明细新鲜度',
+    'card.none': '没有正在进行的会话',
+  }
+
+  const CLIPS = {
+    unknown: ['idle.webm'],
+    idle: ['idle.webm'],
+    working: ['working.webm', 'slack.webm', 'thinking.webm'],
+    waiting: ['waiting.webm'],
+    done: ['done.webm'],
+    offline: ['sleep.webm'],
+  }
+
+  const WORK_ROTATION_MS = 10500
+  const WAITING_ESCALATE_MS = 45000
+
+  let phase = 'unknown'
+  let phaseSince = Date.now()
+  let clipIndex = 0
+  let front = 0
+  let sources = ['idle.webm', null]
+  let state = null
+  let open = new URLSearchParams(location.search).get('open') === '1'
+
+  const t = key => COPY[key] ?? key
+
+  function formatAge(ms) {
+    if (typeof ms !== 'number' || Number.isNaN(ms)) return '—'
+    if (ms < 2000) return '实时'
+    if (ms < 60000) return Math.round(ms / 1000) + ' 秒前'
+    return Math.round(ms / 60000) + ' 分钟前'
+  }
+
+  function formatDuration(startedAt) {
+    const seconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000))
+    if (seconds < 60) return seconds + ' 秒'
+    if (seconds < 3600) return Math.floor(seconds / 60) + ' 分 ' + (seconds % 60) + ' 秒'
+    return Math.floor(seconds / 3600) + ' 时 ' + Math.floor((seconds % 3600) / 60) + ' 分'
+  }
+
+  function cardRows() {
+    const detail = state?.detail ?? {}
+    const rows = []
+    if (typeof detail.sessionId === 'string') rows.push([t('card.session'), detail.sessionId.slice(-8)])
+    if (detail.openStep && typeof detail.openStep === 'object') {
+      rows.push([t('card.step'), '#' + detail.openStep.turn + '/' + detail.openStep.step])
+    }
+    if (typeof detail.steps === 'number') rows.push([t('card.steps'), String(detail.steps)])
+    if (typeof detail.startedAt === 'number') rows.push([t('card.elapsed'), formatDuration(detail.startedAt)])
+    if (typeof detail.pendingCalls === 'number') rows.push([t('card.pending'), String(detail.pendingCalls)])
+    if (typeof detail.activeQuestions === 'number') rows.push([t('card.questions'), String(detail.activeQuestions)])
+    if (typeof detail.lastTool === 'string' && detail.lastTool.length > 0) rows.push([t('card.tool'), detail.lastTool])
+    if (typeof detail.contextPercent === 'number') rows.push([t('card.context'), detail.contextPercent + '%'])
+    if (typeof detail.staleMs === 'number') rows.push([t('card.age'), formatAge(detail.staleMs)])
+    return rows
+  }
+
+  function renderCard() {
+    card.hidden = !open
+    if (!open) return
+    const rows = cardRows()
+    card.replaceChildren()
+    if (rows.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'row'
+      empty.textContent = t('card.none')
+      card.append(empty)
+      return
+    }
+    for (const [key, value] of rows) {
+      const row = document.createElement('div')
+      row.className = 'row'
+      const k = document.createElement('span')
+      k.className = 'k'
+      k.textContent = key
+      const v = document.createElement('span')
+      v.className = 'v'
+      v.textContent = value
+      v.title = value
+      row.append(k, v)
+      card.append(row)
+    }
+  }
+
+  function wantedClip() {
+    if (phase === 'waiting' && clipIndex > 0) return 'startled.webm'
+    const clips = CLIPS[phase] ?? CLIPS.unknown
+    return clips[clipIndex % clips.length]
+  }
+
+  function applyClip() {
+    const wanted = wantedClip()
+    const back = 1 - front
+    if (sources[front] === wanted || sources[back] === wanted) return
+    sources[back] = wanted
+    const element = videos[back]
+    element.src = '../assets/' + wanted
+    element.play().catch(() => {})
+    element.classList.add('front')
+    videos[front].classList.remove('front')
+    front = back
+  }
+
+  function setPhase(next) {
+    if (next === phase) return
+    phase = next
+    phaseSince = Date.now()
+    clipIndex = 0
+    root.dataset.phase = phase
+    label.textContent = t('phase.' + phase)
+    applyClip()
+    renderCard()
+  }
+
+  window.pet.onState(next => {
+    state = next
+    setPhase(next?.phase ?? 'unknown')
+    renderCard()
+  })
+
+  // Rotate the working clips and escalate a long wait.
+  setInterval(() => {
+    const clips = CLIPS[phase] ?? CLIPS.unknown
+    if (phase === 'working' && clips.length > 1) {
+      clipIndex += 1
+      applyClip()
+    } else if (phase === 'waiting' && clipIndex === 0 && Date.now() - phaseSince > WAITING_ESCALATE_MS) {
+      clipIndex = 1
+      applyClip()
+    } else if (state !== null) {
+      renderCard()
+    }
+  }, 1500)
+
+  // Drag the whole window; a click without movement toggles the card.
+  let drag = null
+  stage.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return
+    drag = { x: event.screenX, y: event.screenY, moved: false }
+    window.pet.dragStart()
+    stage.setPointerCapture(event.pointerId)
+  })
+  window.addEventListener('pointermove', event => {
+    if (drag === null) return
+    const dx = event.screenX - drag.x
+    const dy = event.screenY - drag.y
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return
+    drag.moved = true
+    window.pet.dragMove(dx, dy)
+  })
+  window.addEventListener('pointerup', () => {
+    if (drag === null) return
+    const moved = drag.moved
+    drag = null
+    window.pet.dragEnd()
+    if (!moved) {
+      open = !open
+      renderCard()
+    }
+  })
+
+  document.getElementById('pill').addEventListener('click', () => {
+    open = !open
+    renderCard()
+  })
+
+  document.getElementById('pill').addEventListener('contextmenu', event => {
+    event.preventDefault()
+    window.pet.menu()
+  })
+
+  // Click-through everywhere the artwork and card do not cover.
+  window.addEventListener('mousemove', event => {
+    const hit = document.elementFromPoint(event.clientX, event.clientY)
+    window.pet.ignoreMouse(hit === null || hit === document.body || hit === document.documentElement)
+  })
+
+  applyClip()
+</script>
+</body>
+</html>
