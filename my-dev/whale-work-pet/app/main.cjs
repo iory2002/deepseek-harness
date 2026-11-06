@@ -48,9 +48,9 @@ const APP_PATH = (() => {
   return base === 'node.exe' || base === 'electron.exe' || base === 'node' || base === 'electron' ? '' : candidate
 })()
 
-/** Card + pill + stage, so the card can open upward without resizing the window. */
+/** Status pill above the artwork, so the window is the pet plus its label. */
 const WINDOW_WIDTH = SIZE + 60
-const WINDOW_HEIGHT = SIZE + 210
+const WINDOW_HEIGHT = SIZE + 56
 
 /** Append-only trace of window-side actions; empty disables it. */
 const LOG = process.env.WHALE_PET_LOG ?? ''
@@ -370,9 +370,7 @@ function createWindow() {
   // Click-through by default; the renderer re-enables input over the artwork.
   win.setIgnoreMouseEvents(true, { forward: true })
   placeWindow()
-  win.loadFile(join(HERE, 'pet.html'), {
-    query: { size: String(SIZE), open: process.env.WHALE_PET_SNAPSHOT_OPEN === '1' ? '1' : '0' },
-  })
+  win.loadFile(join(HERE, 'pet.html'), { query: { size: String(SIZE) } })
 
   win.once('ready-to-show', () => {
     // A hidden window produces no frames, so even the snapshot path shows it.
