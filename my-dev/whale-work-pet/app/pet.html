@@ -98,6 +98,8 @@
     'phase.working': '工作中',
     'phase.waiting': '等你确认',
     'phase.done': '干完了',
+    'phase.subagent': '派了小助手',
+    'phase.error': '出错了',
     'phase.offline': '宿主无响应',
   }
 
@@ -107,22 +109,34 @@
     working: ['working.webm', 'slack.webm', 'thinking.webm'],
     waiting: ['waiting.webm'],
     done: ['done.webm'],
+    subagent: ['thinking.webm'],
+    error: ['error.webm'],
     offline: ['sleep.webm'],
   }
 
   const WORK_ROTATION_MS = 10500
   const WAITING_ESCALATE_MS = 45000
+  /** Idle this long and she lies down instead of standing there. */
+  const IDLE_NAP_MS = 3 * 60 * 1000
+  /** A turn this long earns an occasional look at the clock. */
+  const LONG_TASK_MS = 10 * 60 * 1000
+  /** One-shot reaction to a click. */
+  const REACTION_MS = 2200
 
   let phase = 'unknown'
   let phaseSince = Date.now()
   let clipIndex = 0
   let front = 0
   let sources = ['idle.webm', null]
+  let reaction = null
 
   const t = key => COPY[key] ?? key
 
   function wantedClip() {
+    if (reaction !== null) return reaction
     if (phase === 'waiting' && clipIndex > 0) return 'startled.webm'
+    if (phase === 'idle' && Date.now() - phaseSince > IDLE_NAP_MS) return 'sleep.webm'
+    if (phase === 'working' && Date.now() - phaseSince > LONG_TASK_MS && clipIndex % 4 === 3) return 'waiting.webm'
     const clips = CLIPS[phase] ?? CLIPS.unknown
     return clips[clipIndex % clips.length]
   }
@@ -154,7 +168,7 @@
     setPhase(next?.phase ?? 'unknown')
   })
 
-  // Rotate the working clips and escalate a long wait.
+  // Rotate the working clips, escalate a long wait, and let the idle nap start.
   setInterval(() => {
     const clips = CLIPS[phase] ?? CLIPS.unknown
     if (phase === 'working' && clips.length > 1) {
@@ -163,14 +177,21 @@
     } else if (phase === 'waiting' && clipIndex === 0 && Date.now() - phaseSince > WAITING_ESCALATE_MS) {
       clipIndex = 1
       applyClip()
+    } else {
+      // The nap and the clock check depend on elapsed time, not on a counter.
+      applyClip()
     }
   }, 1500)
 
-  // Drag the whole window; a double click opens the desktop application.
+  // Drag the whole window; a click gets a reaction, a double click opens the
+  // desktop application. `dragged` survives until the click that follows the
+  // release, so a drag never counts as a click.
   let drag = null
+  let dragged = false
   stage.addEventListener('pointerdown', event => {
     if (event.button !== 0) return
-    drag = { x: event.screenX, y: event.screenY, moved: false }
+    drag = { x: event.screenX, y: event.screenY }
+    dragged = false
     window.pet.dragStart()
     stage.setPointerCapture(event.pointerId)
   })
@@ -178,8 +199,8 @@
     if (drag === null) return
     const dx = event.screenX - drag.x
     const dy = event.screenY - drag.y
-    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return
-    drag.moved = true
+    if (!dragged && Math.abs(dx) + Math.abs(dy) < 4) return
+    dragged = true
     window.pet.dragMove(dx, dy)
   })
   window.addEventListener('pointerup', () => {
@@ -187,7 +208,25 @@
     drag = null
     window.pet.dragEnd()
   })
+
+  stage.addEventListener('click', () => {
+    if (dragged) {
+      dragged = false
+      return
+    }
+    reaction = 'startled.webm'
+    applyClip()
+    window.setTimeout(() => {
+      if (reaction === 'startled.webm') {
+        reaction = null
+        applyClip()
+      }
+    }, REACTION_MS)
+  })
   stage.addEventListener('dblclick', () => {
+    // The second click of a double click already started a reaction; drop it.
+    reaction = null
+    applyClip()
     window.pet.openApp()
   })
 

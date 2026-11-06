@@ -70,6 +70,9 @@ const DONE_WINDOW_MS = 90 * 1000
 /** A live `working` hint from Cordis events expires after this long. */
 const LIVE_BOOST_MS = 45 * 1000
 
+/** How long a failed step keeps the error face up before the real phase returns. */
+const ERROR_HOLD_MS = 6 * 1000
+
 /**
  * The live snapshot the desktop window prefers over the throttled disk fold.
  * Written to the Harness home, so no port, route, or credential is needed.
@@ -304,16 +307,19 @@ function basePayload(sampledAt, detail, missingPhase) {
  *
  * The live facts are always fresher than the projection cache, so they win
  * whenever they have something to say: a person being asked something outranks
- * any work in flight, work in flight outranks a stale `idle`/`done` on disk, and
- * a turn that just closed shows `done` until the fold catches up.
+ * everything, a just-failed step reads as an error for a few seconds, work in
+ * flight outranks a stale `idle`/`done` on disk, and a turn that just closed
+ * shows `done` until the fold catches up.
  *
- * @param {{running: boolean, waiting: number, lastIdleAt: number}} live - event facts.
+ * @param {{running: boolean, waiting: number, lastIdleAt: number, subagents: number, errorUntil: number}} live - event facts.
  * @param {string} diskPhase - the phase the projection cache currently implies.
  * @returns {string} the phase to report.
  */
 function overlayPhase(live, diskPhase) {
   if (live.waiting > 0) return 'waiting'
-  if (live.running) return diskPhase === 'waiting' ? 'waiting' : 'working'
+  if (live.errorUntil > Date.now()) return 'error'
+  if (live.running) return diskPhase === 'waiting' ? 'waiting' : (live.subagents > 0 ? 'subagent' : 'working')
+  if (live.subagents > 0) return 'subagent'
   if (live.lastIdleAt > 0 && Date.now() - live.lastIdleAt < DONE_WINDOW_MS) return 'done'
   return diskPhase
 }
@@ -421,7 +427,17 @@ export function apply(ctx, config) {
    * fallback phase; these facts are what let the window flip within a frame
    * instead of waiting for the throttled projection cache.
    */
-  const live = { running: false, waiting: 0, lastTool: null, lastEventAt: 0, lastIdleAt: 0 }
+  const live = {
+    running: false,
+    waiting: 0,
+    lastTool: null,
+    lastEventAt: 0,
+    lastIdleAt: 0,
+    /** Children the runtime says are running right now. */
+    subagents: 0,
+    /** A failed step keeps the error face up until this instant. */
+    errorUntil: 0,
+  }
 
   // Diagnostic tap: with `config.debug`, every delivered event lands in one
   // append-only line, which is how the push path is measured end to end.
@@ -548,6 +564,29 @@ export function apply(ctx, config) {
     schedulePublish()
     return next()
   }, { global: true }), 'whale-work-pet: tool calls')
+
+  ctx.effect(() => ctx.on('agent/error', () => {
+    note('agent/error')
+    live.errorUntil = Date.now() + ERROR_HOLD_MS
+    live.lastEventAt = Date.now()
+    schedulePublish()
+    // The face falls back to the real phase once the hold expires.
+    setTimeout(() => { void publish() }, ERROR_HOLD_MS + 50)
+  }, { global: true }), 'whale-work-pet: step errors')
+
+  ctx.effect(() => ctx.on('subagent/start', () => {
+    note('subagent/start')
+    live.subagents += 1
+    live.lastEventAt = Date.now()
+    schedulePublish()
+  }, { global: true }), 'whale-work-pet: subagent start')
+
+  ctx.effect(() => ctx.on('subagent/end', () => {
+    note('subagent/end')
+    live.subagents = Math.max(0, live.subagents - 1)
+    live.lastEventAt = Date.now()
+    schedulePublish()
+  }, { global: true }), 'whale-work-pet: subagent end')
 
   // Both asks are waterfalls: incrementing around `next()` reports the wait from
   // the moment the person is asked until the decision lands.
